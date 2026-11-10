@@ -1,0 +1,7 @@
+{
+  "name": "buildbuddy-pc-builder",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Beginner-friendly PC builder with 3D case preview, animated fans, compatibility checks and FPS estimates."
+}

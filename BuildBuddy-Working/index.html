@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f1114" />
+  <meta name="description" content="Plan your first PC with plain-English part guides, compatibility checks, estimated gaming performance and a detailed animated 3D preview." />
+  <title>BuildBuddy | Plan your first PC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a class="skip" href="#builder">Skip to the builder</a>
+  <header class="topbar shell">
+    <a class="brand" href="#top" aria-label="BuildBuddy home"><span class="brand-mark" aria-hidden="true">B</span><span>Build<span>Buddy</span></span></a>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="#builder">Builder</a><a href="#guide">PC basics</a>
+      <button class="btn ghost" id="shareBtn" type="button">Copy parts list</button>
+    </nav>
+  </header>
+
+  <main id="top" class="shell">
+    <section class="intro">
+      <div class="intro-text">
+        <span class="eyebrow"><i></i> Your first PC, without the guesswork</span>
+        <h1>Build a PC that <em>actually fits</em> your needs.</h1>
+        <p>Choose every part with beginner-friendly explanations. BuildBuddy checks compatibility, estimates what your games can run, and lets you inspect your PC in 3D.</p>
+        <div class="intro-points"><span>✓ Compatibility checks</span><span>✓ Animated 3D preview</span><span>✓ Gaming estimates</span></div>
+      </div>
+      <div class="presets" role="group" aria-label="Starting builds">
+        <div class="presets-heading"><span>NOT SURE WHERE TO START?</span><small>Pick a starting point</small></div>
+        <button class="preset" type="button" data-preset="starter"><span class="preset-icon">✦</span><span><strong>Everyday & study</strong><small>School, browsing, office and light games</small></span><b>01</b></button>
+        <button class="preset selected" type="button" data-preset="esports"><span class="preset-icon">◈</span><span><strong>1080p gaming</strong><small>Smooth play in popular games</small></span><b>02</b></button>
+        <button class="preset" type="button" data-preset="creator"><span class="preset-icon">⬡</span><span><strong>Gaming & creating</strong><small>1440p games, editing and streaming</small></span><b>03</b></button>
+      </div>
+    </section>
+
+    <section class="workbench" id="builder" aria-label="PC builder">
+      <div class="panel builder-panel">
+        <div class="builder-top"><div><span class="eyebrow">YOUR BUILD</span><h2>Choose your components</h2><p>Start with a preset or pick each part yourself.</p></div><span class="budget-pill" id="buildState">BUILD IN PROGRESS</span></div>
+        <div class="progress-wrap"><div class="progress-label"><span id="progressText">10 of 10 parts chosen</span><strong id="stepHint">All parts selected</strong></div><div class="progress-track"><div class="progress-fill" id="progressFill"></div></div></div>
+        <div class="budget-control"><label for="budget">MY BUDGET</label><input type="range" id="budget" min="2000" max="20000" step="250" value="6500"/><output id="budgetOut">R$ 6.500</output></div>
+        <div class="toolbar">
+          <label class="check"><input type="checkbox" id="fitOnly"/><span>Only show options that fit my current build</span></label>
+          <label class="sort">Sort <select id="sortBy"><option value="default">Recommended</option><option value="low">Lowest price</option><option value="high">Highest price</option></select></label>
+        </div>
+        <label class="search-wrap"><span>⌕</span><input id="partSearch" type="search" placeholder="Search parts by name or feature…" autocomplete="off"/></label>
+        <div class="tabs" id="tabs" role="tablist" aria-label="Part categories"></div>
+        <div class="step-head"><div><h2 id="stepTitle">Choose your processor</h2><p id="stepSub" class="muted"></p></div><span class="step-index" id="stepIndex">01 / 10</span></div>
+        <div class="parts" id="parts" aria-live="polite"></div>
+        <div class="learn" id="learn"><div class="learn-kicker">WHY THIS PART MATTERS</div><h3 id="learnTitle"></h3><p id="learnText"></p><p class="learn-fit" id="learnFit"></p></div>
+        <div class="step-nav"><button class="btn ghost" id="prevBtn" type="button">← Back</button><button class="btn primary" id="nextBtn" type="button">Next part →</button></div>
+      </div>
+
+      <aside class="side">
+        <section class="panel viewer-panel" aria-label="3D preview">
+          <div class="preview-head"><div><span class="eyebrow">LIVE PREVIEW</span><h2>Your PC in 3D</h2><p>Drag to rotate · scroll to zoom · click a component to select it</p></div><span class="live-pill"><i></i> LIVE MODEL</span></div>
+          <div class="stage" id="stage"><canvas id="pcCanvas" aria-label="Interactive 3D model of your PC"></canvas><div class="stage-tip" id="stageTip">Loading 3D model…</div><div class="stage-hover" id="hoverName" hidden></div><div class="model-hud"><span id="fanHud">CASE FANS · ANIMATED</span><span id="caseHud">MESH MID-TOWER</span></div></div>
+          <div class="controls"><div class="seg" role="group" aria-label="Camera view"><button type="button" data-view="home" class="on">3/4</button><button type="button" data-view="side">Side</button><button type="button" data-view="front">Front</button><button type="button" data-view="top">Top</button></div><label class="toggle"><input type="checkbox" id="glassToggle" checked/><span>Glass</span></label><label class="toggle"><input type="checkbox" id="lightToggle" checked/><span>RGB</span></label><button class="btn ghost small" id="shotBtn" type="button">Save image</button></div>
+          <div class="sliders"><label>Fan speed <input type="range" id="fanSpeed" min="0" max="3" step="1" value="1"/><output id="fanOut">Normal</output></label><label>Exploded view <input type="range" id="explode" min="0" max="100" step="1" value="0"/><output id="explodeOut">Off</output></label></div>
+          <p class="fine">The 3D model is an illustrative representation. Real component dimensions and designs vary.</p>
+        </section>
+
+        <section class="panel summary-panel" aria-label="Build summary">
+          <div class="panel-heading"><h3>Build overview</h3><span id="completionTag">10 PARTS</span></div>
+          <div class="summary-total"><div><span>Estimated total</span><strong id="totalPrice">R$ 0</strong></div><div class="watts"><span>Estimated peak draw</span><strong id="wattOut">0 W</strong></div></div>
+          <div class="budget-bar"><i id="budgetFill"></i></div><p class="budget-note" id="budgetNote"></p>
+          <div class="summary-list" id="list"></div>
+          <div class="summary-actions"><button class="btn ghost" id="shareBtn2" type="button">Copy build</button><button class="btn ghost" id="resetBtn" type="button">Start over</button></div>
+        </section>
+
+        <section class="panel price-panel" aria-label="Price update manager">
+          <div class="panel-heading"><h3>Brazil price updates</h3><span class="verified-dot">● PRICE FEED</span></div>
+          <p class="price-status" id="priceStatus">Using built-in reference estimates. No verified price file has been imported yet.</p>
+          <div class="price-actions"><button class="btn primary small" id="priceImportBtn" type="button">Import monthly price file</button><button class="btn ghost small" id="priceTemplateBtn" type="button">Download JSON template</button><button class="btn ghost small" id="priceResetBtn" type="button" hidden>Restore estimates</button></div>
+          <input type="file" id="priceImportInput" accept="application/json,.json" hidden />
+          <p class="fine">The monthly review returns import-ready JSON. Save it as a .json file, then import it here. Exact, verified offers update the matching parts; all other items remain labelled as estimates. The site does not scrape retailer pages or promise live prices.</p>
+        </section>
+
+        <section class="panel compatibility-panel" aria-label="Compatibility">
+          <div class="panel-heading"><h3>Will everything fit?</h3><span id="compatLabel">CHECKING</span></div><div class="status" id="status"></div><ul class="checks" id="checks"></ul>
+        </section>
+        <section class="panel performance-panel" aria-label="Gaming performance">
+          <div class="panel-heading"><h3>What can this PC play?</h3><span>ESTIMATED FPS</span></div><p class="muted fine" id="gameNote"></p><div class="games" id="games"></div><p class="fine">Planning ranges only, not benchmark promises. Actual FPS depends on resolution, graphics settings, game updates, drivers and cooling.</p>
+        </section>
+      </aside>
+    </section>
+
+    <section class="guide" id="guide"><div class="guide-heading"><span class="eyebrow">THE QUICK GUIDE</span><h2>PC building, in plain English.</h2><p>You do not need to know everything before you start. Here are the basics that matter.</p></div><div class="guide-grid"><article><span>01</span><h3>Parts must fit each other</h3><p>The CPU and motherboard need the same socket. RAM must match the board’s memory type, and the motherboard must fit inside the case.</p></article><article><span>02</span><h3>Power and space matter</h3><p>The power supply needs enough capacity with some headroom. Long graphics cards and tall coolers must fit inside the case.</p></article><article><span>03</span><h3>Spend where it counts</h3><p>For gaming, the graphics card usually has the biggest impact. For editing, the CPU and memory can matter more.</p></article><article><span>04</span><h3>Airflow keeps it cool</h3><p>Cool air comes in at the front and warm air leaves at the back or top. A few good fans are more useful than lots of cheap ones.</p></article></div></section>
+  </main>
+  <footer class="footer shell"><span>BuildBuddy · Your first PC, made simple.</span><span>Reference prices in BRL unless a matching verified price feed has been imported. Always check the final retailer offer before buying.</span></footer>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}</script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
