@@ -1,7 +1,7 @@
 {
   "name": "buildbuddy-pc-builder",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
-  "description": "Beginner-friendly PC builder with 3D case preview, animated fans, compatibility checks and FPS estimates."
+  "description": "Beginner-friendly PC builder with prices in reais, compatibility checks, a 3D preview and estimated frame rates for popular games."
 }

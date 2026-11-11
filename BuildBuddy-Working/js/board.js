@@ -83,17 +83,24 @@ export function buildBoard(kit, anchors, parts) {
   /* ---- M.2 slots (first slot carries the selected SSD) ---- */
   const m2y = yT - 1.28, m2x = cx + 0.05;
   const ssd = new THREE.Group();
-  if (storage.gen4) {
-    box(ssd, 0.84, 0.25, 0.1, mats.heatsink, 0, 0, 0.09, { r: 0.015 });
+  const isM2Drive = storage.formFactor === 'M.2 2280' || storage.interface.includes('NVMe');
+  if (storage.gen4 || storage.interface.includes('PCIe 5.0')) {
+    box(ssd, 0.92, 0.28, 0.1, mats.heatsink, 0, 0, 0.09, { r: 0.015 });
     for (let i = 0; i < 9; i++) box(ssd, 0.02, 0.22, 0.03, mats.aluminiumDark, -0.36 + i * 0.09, 0, 0.16, { cast: false });
+    const generation = storage.interface.includes('PCIe 5.0') ? 'PCIe 5.0' : 'NVMe';
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.23), new THREE.MeshStandardMaterial({
+      map: labelTexture(generation, `${storage.capacity >= 1000 ? storage.capacity / 1000 + ' TB' : storage.capacity + ' GB'}`, '#45e4ff', 256, 128),
+      roughness: 0.5, emissive: 0x456677
+    }));
+    label.position.set(0, 0, 0.145); ssd.add(label);
   } else {
-    box(ssd, 0.8, 0.22, 0.012, new THREE.MeshStandardMaterial({ color: 0x143018, roughness: 0.55 }), 0, 0, 0.03);
+    box(ssd, 0.92, 0.28, 0.035, new THREE.MeshStandardMaterial({ color: 0x176b73, roughness: 0.45, metalness: 0.3 }), 0, 0, 0.045);
     for (let i = 0; i < 4; i++) box(ssd, 0.11, 0.1, 0.012, mats.plastic, -0.28 + i * 0.16, 0, 0.044, { cast: false });
-    const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.16), new THREE.MeshStandardMaterial({ map: labelTexture('NVMe', `${storage.capacity >= 1000 ? storage.capacity / 1000 + ' TB' : storage.capacity + ' GB'}`, '#8b9cff', 256, 128), roughness: 0.5 }));
-    lab.position.set(0.15, 0, 0.052); ssd.add(lab);
+    const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.23), new THREE.MeshStandardMaterial({ map: labelTexture('NVMe', `${storage.capacity >= 1000 ? storage.capacity / 1000 + ' TB' : storage.capacity + ' GB'}`, '#45e4ff', 256, 128), roughness: 0.5, emissive: 0x456677 }));
+    lab.position.set(0.1, 0, 0.073); ssd.add(lab);
   }
-  ssd.position.set(m2x, m2y, 0.01);
-  tag(ssd, 'storage'); root.add(ssd);
+  ssd.position.set(m2x, m2y, 0.025);
+  if (isM2Drive) { tag(ssd, 'storage'); root.add(ssd); }
   // slot screws and covers for extra M.2 positions
   if (board.m2 >= 2) box(bg, 0.8, 0.2, 0.05, mats.aluminiumDark, m2x, -0.95, 0.05, { r: 0.012 });
 
@@ -224,4 +231,43 @@ export function buildBoard(kit, anchors, parts) {
     plugCpu: world(xL + 0.75, yT - 0.07, 0.17),
     plug24: world(xR - 0.07, 0.15, 0.19)
   };
+}
+
+/** Builds visible 2.5/3.5-inch drives on an interior case mount; M.2 drives sit on the board. */
+export function buildStorage(kit, storage, anchors) {
+  const { mats, box, cyl, tag } = kit;
+  const formFactor = storage.formFactor || 'M.2 2280';
+  if (formFactor === 'M.2 2280' || storage.interface.includes('NVMe')) return null;
+
+  const group = new THREE.Group();
+  const is3p5 = formFactor === '3.5-inch';
+  const isHdd = storage.interface.includes('HDD');
+  const width = is3p5 ? 0.88 : 0.66;
+  const height = is3p5 ? 0.58 : 0.4;
+  const thickness = isHdd ? 0.13 : 0.055;
+  const shell = isHdd ? mats.aluminium : mats.plastic;
+
+  box(group, width, height, thickness, shell, 0, 0, 0, { r: 0.025 });
+  box(group, width - 0.08, height - 0.08, 0.012, mats.aluminiumDark, 0, 0, thickness / 2 + 0.007, { r: 0.018, cast: false });
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    cyl(group, 0.022, 0.022, 0.012, mats.silver, sx * (width / 2 - 0.055), sy * (height / 2 - 0.055), thickness / 2 + 0.016, 'z', 10);
+  }
+  if (isHdd) {
+    cyl(group, 0.15, 0.15, 0.012, mats.silver, -width * 0.18, 0.02, thickness / 2 + 0.019, 'z', 32);
+    cyl(group, 0.035, 0.035, 0.014, mats.aluminiumDark, -width * 0.18, 0.02, thickness / 2 + 0.027, 'z', 20);
+  }
+
+  const capacity = storage.capacity >= 1000 ? `${storage.capacity / 1000} TB` : `${storage.capacity} GB`;
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.55, height * 0.38), new THREE.MeshStandardMaterial({
+    map: labelTexture(isHdd ? 'SATA HDD' : 'SATA SSD', capacity, '#d6e0e7', 256, 128),
+    roughness: 0.55
+  }));
+  label.position.set(width * 0.18, 0, thickness / 2 + 0.022); group.add(label);
+
+  box(group, 0.08, 0.12, 0.04, mats.plasticLight, width / 2 - 0.015, -height * 0.25, 0, { cast: false });
+  box(group, 0.08, 0.08, 0.04, mats.plasticLight, width / 2 - 0.015, height * 0.25, 0, { cast: false });
+
+  group.position.set(anchors.frontX - 0.55, anchors.shroudTopY + 0.42, anchors.glassZ - 0.55);
+  tag(group, 'storage');
+  return group;
 }

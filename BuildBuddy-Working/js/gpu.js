@@ -64,8 +64,8 @@ export function buildGpu(kit, gpu, anchors, board) {
   for (let i = 0; i < 6; i++) box(g, 0.035, 0.05, 0.012, mats.gold, plugX - 0.12 + i * 0.048, -0.1, D + 0.025, { cast: false });
   tag(g, 'gpu');
 
-  // placement: top of the first x16 slot
-  g.position.set(anchors.boardX0 + 0.04, board.slot16.y + 0.07, board.group.position.z + 0.01);
+  // Align the connector to the first x16 slot rather than floating it above the slot.
+  g.position.set(anchors.boardX0 + 0.04, board.slot16.y, board.group.position.z + 0.01);
   g.userData.plug = new THREE.Vector3(plugX, -0.1, D + 0.02).add(g.position);
   g.userData.end = len;
   return g;

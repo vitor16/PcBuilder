@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 
 export const CASE_DIMS = {
+  budget: { L: 4.6, W: 2.05, H: 4.75, base: 1.35 },
   compact: { L: 4.0, W: 1.9, H: 4.2, base: 1.15 },
   mini: { L: 4.1, W: 2.0, H: 4.35, base: 1.15 },
+  matxglass: { L: 4.2, W: 2.0, H: 4.5, base: 1.2 },
   cube: { L: 4.0, W: 2.45, H: 4.25, base: 1.1 },
   mesh: { L: 4.5, W: 2.1, H: 4.8, base: 1.4 },
   silent: { L: 4.8, W: 2.2, H: 4.9, base: 1.4 },
@@ -29,7 +31,7 @@ export function buildCase(kit, pcCase, fanPack) {
   group.add(body);
 
   const style = pcCase.style;
-  const showcase = ['showcase', 'fishbowl', 'towerglass'].includes(style);
+  const showcase = ['showcase', 'fishbowl', 'towerglass', 'matxglass'].includes(style);
   const hasPerfFront = !showcase && style !== 'silent';
   const caseSteel = pcCase.finish === 'light' ? mats.steelWhite : mats.steel;
   const caseSteelLight = pcCase.finish === 'light' ? mats.steelWhiteLight : mats.steelLight;

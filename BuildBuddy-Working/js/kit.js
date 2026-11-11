@@ -33,7 +33,11 @@ export function createKit() {
     pcb: std({ color: 0xffffff, map: TX.pcbTexture(), roughness: 0.55, metalness: 0.25 }),
     pcbGpu: std({ color: 0xffffff, map: TX.pcbTexture({ base: '#0d1a14', trace: '#1c3a2e', seed: 11 }), roughness: 0.55, metalness: 0.25 }),
     vent: std({ color: 0x090b0e, metalness: 0.7, roughness: 0.5, alphaMap: perf, alphaTest: 0.5, side: THREE.DoubleSide }),
-    glass: new THREE.MeshBasicMaterial({ color: 0xa9d2e5, transparent: true, opacity: 0.07, side: THREE.FrontSide, depthWrite: false, toneMapped: false }),
+    glass: new THREE.MeshPhysicalMaterial({
+      color: 0xc4e5f1, transparent: true, opacity: 0.1, roughness: 0.1, metalness: 0.02,
+      clearcoat: 0.95, clearcoatRoughness: 0.06, envMapIntensity: 0.65,
+      side: THREE.FrontSide, depthWrite: false
+    }),
     fanFrame: std({ color: 0x0f1317, metalness: 0.3, roughness: 0.5 }),
     fanBlade: std({ color: 0x1a2027, metalness: 0.2, roughness: 0.45, side: THREE.DoubleSide }),
     screw: std({ color: 0x8c949b, metalness: 1, roughness: 0.3 })
