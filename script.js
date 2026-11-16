@@ -196,13 +196,14 @@ function renderParts() {
   $('gpuVendorFilterWrap').hidden = !isGpu;
   $('gpuGenerationFilterWrap').hidden = !isGpu;
   if (isCpu || isGpu) {
+    const vendor = $(isCpu ? 'cpuVendorFilter' : 'gpuVendorFilter').value;
     const select = $(isCpu ? 'cpuGenerationFilter' : 'gpuGenerationFilter');
     const priorValue = select.value;
-    const generations = [...new Set(items.map((part) => part.generation))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const vendorItems = items.filter((part) => !vendor || part.vendor === vendor);
+    const generations = [...new Set(vendorItems.map((part) => part.generation))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     const label = isCpu ? 'All CPU generations' : 'All GPU generations';
     select.innerHTML = `<option value="">${label}</option>${generations.map((generation) => `<option value="${escapeHTML(generation)}">${escapeHTML(generation)}</option>`).join('')}`;
     if (generations.includes(priorValue)) select.value = priorValue;
-    const vendor = $(isCpu ? 'cpuVendorFilter' : 'gpuVendorFilter').value;
     const generation = select.value;
     items = items.filter((part) => (!vendor || part.vendor === vendor) && (!generation || part.generation === generation));
   }
