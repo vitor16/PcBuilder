@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "retailer": "KaBuM!",
   "checkedAt": "2026-11-10",
   "currency": "BRL",
   "prices": []

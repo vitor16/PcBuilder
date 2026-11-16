@@ -1,11 +1,12 @@
 import * as THREE from 'three';
+import { labelTexture } from './textures.js';
 
 /**
  * Graphics card. The PCB lies flat, perpendicular to the motherboard.
  * Local axes: x = length (rear to front), y = thickness (fans point down), z = depth from the board.
  * What you see through the glass is the long top edge with the logo strip and power plug.
  */
-export function buildGpu(kit, gpu, anchors, board) {
+export function buildGpu(kit, gpu, board) {
   if (!gpu || gpu.id === 'none') return null;
   const { mats, box, cyl, tag, createFan, screw } = kit;
 
@@ -14,6 +15,7 @@ export function buildGpu(kit, gpu, anchors, board) {
   const T = triple ? 0.56 : 0.41;
   const D = triple ? 1.32 : 1.14;
   const nFans = triple ? 3 : 2;
+  const accentColor = `#${Number(gpu.color || 0x35e0ff).toString(16).padStart(6, '0').slice(-6)}`;
   const accent = new THREE.MeshStandardMaterial({ color: gpu.color || 0x35e0ff, metalness: 0.3, roughness: 0.4, emissive: gpu.color || 0x35e0ff, emissiveIntensity: 0.15 });
 
   const g = new THREE.Group();
@@ -40,6 +42,15 @@ export function buildGpu(kit, gpu, anchors, board) {
   box(g, len * 0.38, 0.032, 0.012, mats.glow, len * 0.62, -0.035, D + 0.01, { cast: false });
   box(g, len - 0.15, 0.012, 0.016, accent, len / 2, -T + 0.03, D + 0.01, { cast: false });
   box(g, len * 0.2, 0.018, 0.012, accent, len * 0.28, 0.0, D + 0.012, { cast: false });
+  const badgeTitle = gpu.name.replace(/^(NVIDIA GeForce|AMD Radeon|Intel Arc)\s*/i, '');
+  const badge = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(len * 0.48, 1.05), 0.15), new THREE.MeshStandardMaterial({
+    map: labelTexture(badgeTitle, `${gpu.vram} GB ${gpu.mem}`, accentColor, 256, 96),
+    roughness: 0.5,
+    emissive: gpu.color || 0x35e0ff,
+    emissiveIntensity: 0.08
+  }));
+  badge.position.set(len * 0.58, -0.11, D + 0.028);
+  g.add(badge);
   // fans on the underside
   const fd = triple ? 0.96 : 0.9;
   for (let i = 0; i < nFans; i++) {
@@ -64,8 +75,8 @@ export function buildGpu(kit, gpu, anchors, board) {
   for (let i = 0; i < 6; i++) box(g, 0.035, 0.05, 0.012, mats.gold, plugX - 0.12 + i * 0.048, -0.1, D + 0.025, { cast: false });
   tag(g, 'gpu');
 
-  // Align the connector to the first x16 slot rather than floating it above the slot.
-  g.position.set(anchors.boardX0 + 0.04, board.slot16.y, board.group.position.z + 0.01);
+  // Align the card's edge connector with the center of the board's first x16 slot.
+  g.position.set(board.slot16.x - 0.5, board.slot16.y + 0.03, board.slot16.z - 0.04);
   g.userData.plug = new THREE.Vector3(plugX, -0.1, D + 0.02).add(g.position);
   g.userData.end = len;
   return g;

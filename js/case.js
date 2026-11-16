@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { labelTexture } from './textures.js';
 
 export const CASE_DIMS = {
   budget: { L: 4.6, W: 2.05, H: 4.75, base: 1.35 },
@@ -21,7 +22,7 @@ const T = 0.04; // panel thickness
  * Front of the case is +x, rear is -x, glass side faces +z.
  * Returns { group, dims, ...anchors used by the board and card builders }.
  */
-export function buildCase(kit, pcCase, fanPack) {
+export function buildCase(kit, pcCase, fanPack, psu) {
   const { mats, box, cyl, screw, tag, createFan } = kit;
   const d = CASE_DIMS[pcCase.style];
   const { L, W, H, base } = d;
@@ -134,6 +135,12 @@ export function buildCase(kit, pcCase, fanPack) {
   for (let i = 0; i < 9; i++) box(shroud, 0.025, 0.006, 0.5, mats.plastic, shX - shW / 2 + 0.5 + i * 0.1, base + 0.025, 0.2, { cast: false });
   // PSU watt label plate
   box(shroud, 0.5, 0.2, 0.01, mats.plasticLight, shX + shW / 2 - 0.5, base / 2, W / 2 - 0.067, { cast: false });
+  const psuLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.16), new THREE.MeshStandardMaterial({
+    map: labelTexture(psu ? `${psu.watts} W POWER` : 'POWER SUPPLY', psu?.standard || 'ATX', '#dce4e9', 256, 96),
+    roughness: 0.65
+  }));
+  psuLabel.position.set(shX + shW / 2 - 0.5, base / 2, W / 2 - 0.061);
+  shroud.add(psuLabel);
   tag(shroud, 'psu');
   body.add(shroud);
 

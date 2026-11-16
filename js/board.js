@@ -132,6 +132,11 @@ export function buildBoard(kit, anchors, parts) {
   box(cpuG, 0.56, 0.56, 0.05, mats.plasticLight, 0, 0, 0.03);
   box(cpuG, 0.4, 0.4, 0.04, mats.silver, 0, 0, 0.075, { r: 0.015 });
   box(cpuG, 0.27, 0.27, 0.012, mats.aluminium, 0, 0, 0.1, { r: 0.01 });
+  const cpuLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.12), new THREE.MeshStandardMaterial({
+    map: labelTexture(cpu.name.replace(/^(AMD|Intel)\s+/i, ''), `${cpu.cores}C · ${cpu.socket}`, '#e5edf1', 256, 96),
+    roughness: 0.45
+  }));
+  cpuLabel.position.z = 0.107; cpuG.add(cpuLabel);
   cpuG.position.set(cx, cy, 0.0);
   tag(cpuG, 'cpu'); root.add(cpuG);
 
@@ -153,6 +158,11 @@ export function buildBoard(kit, anchors, parts) {
     box(stick, 0.08, ramH - 0.02, 0.28, mats.heatsink, 0, 0, 0.14 + 0.1, { r: 0.012 });
     box(stick, 0.07, ramH - 0.18, 0.045, mats.glow, 0, 0.0, 0.14 + 0.1 + 0.15, { cast: false });
     box(stick, 0.084, ramH - 0.02, 0.012, mats.aluminiumDark, 0, 0, 0.14 + 0.1 + 0.13, { cast: false });
+    for (const x of [-0.032, 0.032]) {
+      for (const y of [-0.34, -0.16, 0.16, 0.34]) {
+        box(stick, 0.012, 0.018, 0.008, mats.silver, x, y, 0.414, { cast: false });
+      }
+    }
     stick.position.set(sx, cy - 0.05, 0.0);
     ramG.add(stick);
   }
@@ -198,6 +208,11 @@ export function buildBoard(kit, anchors, parts) {
       box(coolG, sw + 0.02, 1.08, 0.035, mats.aluminiumDark, sx, 0, top + 0.015, { r: 0.012 }); // top cap
       box(coolG, sw - 0.1, 0.2, 0.012, mats.glowSoft, sx, 0, top + 0.04, { cast: false });
       box(coolG, 0.05, 1.05, top - bottom, mats.aluminiumDark, sx - sw / 2 - 0.01, 0, (top + bottom) / 2, { cast: false });
+      const coolerBadge = new THREE.Mesh(new THREE.PlaneGeometry(sw - 0.12, 0.1), new THREE.MeshStandardMaterial({
+        map: labelTexture(cooler.name.split(' ')[0], `${cooler.capacity} W`, '#d9e3e8', 256, 96),
+        roughness: 0.5
+      }));
+      coolerBadge.position.set(sx, 0, top + 0.05); coolG.add(coolerBadge);
     });
     const fanZ = (top + bottom) / 2;
     const f1 = createFan(1.2, { rgb: false });
@@ -215,6 +230,11 @@ export function buildBoard(kit, anchors, parts) {
     cyl(blk, 0.27, 0.27, 0.012, mats.plastic, 0, 0, 0.335, 'z', 40);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.02, 8, 48), mats.glowRing);
     ring.position.z = 0.35; blk.add(ring);
+    const pumpBadge = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.1), new THREE.MeshStandardMaterial({
+      map: labelTexture(cooler.name.split(' ')[0], `${cooler.radiator} mm`, '#e1edf2', 256, 96),
+      roughness: 0.4
+    }));
+    pumpBadge.position.z = 0.36; blk.add(pumpBadge);
     cyl(blk, 0.1, 0.1, 0.012, mats.glow, 0, 0, 0.352, 'z', 24);
     box(blk, 0.58, 0.58, 0.06, mats.copper, 0, 0, 0.03, { cast: false });
     coolG.add(blk);
@@ -225,7 +245,7 @@ export function buildBoard(kit, anchors, parts) {
   return {
     group: root, BH, BW, parts: { bg, cpuG, ramG, coolG, ssd },
     cpuWorld: world(cx, cy, 0.1),
-    slot16: world(xL + 0.3, y16, 0.12),
+    slot16: world(xL + 0.3 + 0.45, y16, 0.065),
     yTopWorld: anchors.boardTop,
     cx, cy, xR, xL, yT,
     plugCpu: world(xL + 0.75, yT - 0.07, 0.17),

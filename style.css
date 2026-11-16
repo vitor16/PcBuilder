@@ -438,6 +438,14 @@ select:focus {
   background: var(--accent-soft);
 }
 
+.preset-scratch {
+  border-style: dashed;
+}
+
+.preset-scratch:hover {
+  border-color: var(--accent);
+}
+
 .preset-label {
   grid-column: 1;
   font-weight: 600;

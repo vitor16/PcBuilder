@@ -3,7 +3,8 @@ import { addCatalogOptions } from './catalog-expansion.js';
 /*
  * BuildBuddy catalog.
  *
- * Prices are reference numbers in BRL (R$), typed in by hand. They are not live store prices.
+ * The price field is legacy reference data used only to distinguish paid parts from included options.
+ * The UI hides it and displays prices only from imported KaBuM! price feeds.
  * Specs describe typical values for each model family. Check the product page before buying.
  */
 
@@ -739,6 +740,31 @@ export const catalog = {
 };
 
 addCatalogOptions(catalog);
+
+for (const cpu of catalog.cpu) {
+  const intelModel = cpu.name.match(/Core i[3579]-(\d{4,5})/i);
+  const ryzenModel = cpu.name.match(/Ryzen\s+\d+\s+(\d{4})/i);
+  cpu.vendor = /Intel|Core i[3579]/i.test(cpu.name) ? 'Intel' : /AMD|Ryzen/i.test(cpu.name) ? 'AMD' : 'Other';
+  cpu.generation = ryzenModel
+    ? `Ryzen ${Math.floor(Number(ryzenModel[1]) / 1000) * 1000}`
+    : intelModel
+      ? `Core ${Math.floor(Number(intelModel[1]) / 1000)}th Gen`
+      : 'Other';
+}
+
+for (const gpu of catalog.gpu) {
+  const geforceModel = gpu.name.match(/GeForce\s+(RTX|GTX)\s+(\d{4})/i);
+  const radeonModel = gpu.name.match(/Radeon RX\s+(\d{3,4})/i);
+  const arcModel = gpu.name.match(/Arc\s+([A-Z])/i);
+  gpu.vendor = geforceModel ? 'NVIDIA' : radeonModel ? 'AMD' : arcModel ? 'Intel' : 'None';
+  gpu.generation = geforceModel
+    ? `GeForce ${geforceModel[1].toUpperCase()} ${Math.floor(Number(geforceModel[2]) / 100)}-series`
+    : radeonModel
+      ? `Radeon RX ${Number(radeonModel[1]) < 1000 ? Math.floor(Number(radeonModel[1]) / 100) * 100 : Math.floor(Number(radeonModel[1]) / 1000) * 1000}-series`
+      : arcModel
+        ? `Arc ${arcModel[1].toUpperCase()}-series`
+        : 'No dedicated GPU';
+}
 
 export const presets = {
   starter: { cpu: 'r5600g', cooler: 'stock', motherboard: 'a520m', ram: '16ddr4', gpu: 'none', storage: '500ssd', psu: '500w', case: 'compact', fans: 'included', lighting: 'off', os: 'win11' },

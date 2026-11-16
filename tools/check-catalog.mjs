@@ -6,6 +6,7 @@ import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const data = await import(pathToFileURL(path.join(root, 'js/data.js')).href);
 const logic = await import(pathToFileURL(path.join(root, 'js/logic.js')).href);
+const priceFeedModule = await import(pathToFileURL(path.join(root, 'js/price-feed.js')).href);
 const { catalog, categories, categoryInfo, presets, presetInfo } = data;
 const { evaluate, estimateGames, gamesSummary, specRows, RESOLUTIONS, totalPrice, money } = logic;
 
@@ -29,6 +30,9 @@ const minimumCatalogSizes = {
 for (const [cat, minimum] of Object.entries(minimumCatalogSizes)) {
   if ((catalog[cat]?.length || 0) < minimum) fail(`${cat}: expected at least ${minimum} options, found ${catalog[cat]?.length || 0}`);
 }
+for (const cat of categories) {
+  if (catalog[cat].length < 20) fail(`${cat}: expected at least 20 options, found ${catalog[cat].length}`);
+}
 if (!catalog.gpu.some((gpu) => gpu.id === 'rx9060xt' && /RX 9060 XT/i.test(gpu.name))) fail('RX 9060 XT is missing');
 if (!catalog.os.some((os) => os.id === 'win7') || !catalog.os.some((os) => os.id === 'win8') ||
     !catalog.os.some((os) => os.id === 'win81') || !catalog.os.some((os) => os.id === 'win10') ||
@@ -42,7 +46,7 @@ for (const os of linuxOs) {
   if (!presets[presetId]) fail(`${os.name}: missing Linux preset`);
   else if (presets[presetId].os !== os.id) fail(`${os.name}: Linux preset has the wrong OS`);
 }
-pass('every hardware category has 10+ further options; OS includes Windows 7–11 and 20+ Linux distros');
+pass('every category has at least 20 options; OS includes Windows 7–11 and 20+ Linux distros');
 
 // 3. IDs are unique, prices are numbers, every part has copy and spec rows
 const seenIds = new Map();
@@ -63,6 +67,37 @@ for (const cat of categories) {
 }
 const dedicatedGpus = catalog.gpu.filter((g) => g.id !== 'none').length;
 pass(`${seenIds.size} options, ${dedicatedGpus} dedicated graphics cards, ${catalog.case.length} cases, no duplicate ids`);
+
+for (const cpu of catalog.cpu) if (!cpu.vendor || !cpu.generation) fail(`${cpu.id}: missing CPU vendor or generation metadata`);
+for (const gpu of catalog.gpu) if (!gpu.vendor || !gpu.generation) fail(`${gpu.id}: missing GPU vendor or generation metadata`);
+pass('every CPU and GPU has filterable vendor and generation metadata');
+
+// Price imports must be explicitly attributable to KaBuM! and link to its domain.
+const validPrice = {
+  schemaVersion: 2, retailer: 'KaBuM!', checkedAt: '2026-11-10', currency: 'BRL',
+  prices: [{ id: catalog.cpu[0].id, price: 999, source: 'KaBuM!', url: 'https://www.kabum.com.br/produto/1', availability: 'in_stock' }]
+};
+const generatedPriceTemplate = priceFeedModule.makePriceTemplate();
+if (generatedPriceTemplate.schemaVersion !== 2 || generatedPriceTemplate.retailer !== 'KaBuM!') {
+  fail('generated price template does not identify the KaBuM! schema');
+}
+try {
+  priceFeedModule.validatePriceFeed(validPrice, seenIds);
+  pass('KaBuM price imports validate');
+} catch (error) {
+  fail(`valid KaBuM price import was rejected: ${error.message}`);
+}
+for (const [label, invalid] of [
+  ['different retailer', { ...validPrice, retailer: 'Other store' }],
+  ['non-KaBuM URL', { ...validPrice, prices: [{ ...validPrice.prices[0], url: 'https://example.com/product/1' }] }]
+]) {
+  try {
+    priceFeedModule.validatePriceFeed(invalid, seenIds);
+    fail(`price import accepted a ${label}`);
+  } catch {
+    pass(`price import rejects ${label}`);
+  }
+}
 
 // 4. Presets reference real parts and have labels
 for (const [name, preset] of Object.entries(presets)) {
@@ -107,6 +142,18 @@ for (const os of catalog.os) {
   }
 }
 pass('OS selection does not invent an FPS adjustment without benchmark data');
+
+for (const partial of [{}, { cpu: 'r5600' }, { cpu: 'r5600', gpu: 'none' }]) {
+  try {
+    evaluate(partial);
+    estimateGames(partial, '1080');
+  } catch (error) {
+    fail(`partial build ${JSON.stringify(partial)} threw: ${error.message}`);
+  }
+}
+if (!evaluate({}).incomplete) fail('an empty build should be marked incomplete');
+if (estimateGames({}).some((game) => game.fps !== null)) fail('an empty build should not show game FPS estimates');
+pass('empty and partial builds render compatibility and game-planner states safely');
 
 // 7. Each single-part swap evaluates without throwing
 let swaps = 0;

@@ -43,14 +43,14 @@
   <main>
     <section class="intro wrap" id="start">
       <div class="intro-copy">
-        <p class="eyebrow">Prices in reais (R$)</p>
+        <p class="eyebrow">KaBuM! checked prices · reais (R$)</p>
         <h1>Build a PC you can afford, and know what it will run.</h1>
         <p class="lead">Choose one part at a time. We check that the pieces fit, keep the total in reais, and estimate the frame rates you can expect in popular games.</p>
         <a class="btn btn-primary" href="#builder">Start building</a>
       </div>
       <div class="starts">
-        <h2>Or start from a build</h2>
-        <p class="muted">Each one is a complete, checked build. Change any part after you pick it.</p>
+        <h2>Start a build</h2>
+        <p class="muted">Choose a complete build to customize it, or start with an empty list and select every part yourself.</p>
         <div id="presets" class="preset-grid"></div>
       </div>
     </section>
@@ -122,6 +122,33 @@
                 <option value="high">Price: high to low</option>
               </select>
             </label>
+            <label id="cpuVendorFilterWrap" class="select" hidden>
+              <span class="sr-only">Filter CPUs by vendor</span>
+              <select id="cpuVendorFilter">
+                <option value="">All CPU vendors</option>
+                <option value="AMD">AMD</option>
+                <option value="Intel">Intel</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+            <label id="cpuGenerationFilterWrap" class="select" hidden>
+              <span class="sr-only">Filter CPUs by generation</span>
+              <select id="cpuGenerationFilter"><option value="">All CPU generations</option></select>
+            </label>
+            <label id="gpuVendorFilterWrap" class="select" hidden>
+              <span class="sr-only">Filter graphics cards by vendor</span>
+              <select id="gpuVendorFilter">
+                <option value="">All GPU vendors</option>
+                <option value="AMD">AMD</option>
+                <option value="NVIDIA">NVIDIA</option>
+                <option value="Intel">Intel</option>
+                <option value="None">No dedicated GPU</option>
+              </select>
+            </label>
+            <label id="gpuGenerationFilterWrap" class="select" hidden>
+              <span class="sr-only">Filter graphics cards by generation</span>
+              <select id="gpuGenerationFilter"><option value="">All GPU generations</option></select>
+            </label>
             <label class="check-label">
               <input id="fitOnly" type="checkbox" checked>
               Only show parts that fit
@@ -182,13 +209,14 @@
 
         <section class="card">
           <div class="card-head">
-            <h2>Prices</h2>
+            <h2>KaBuM! prices</h2>
           </div>
           <p id="priceStatus" class="muted small"></p>
+          <p class="muted small">Prices are not fetched live. Import a checked KaBuM! price file; items without one stay unpriced.</p>
           <div class="price-actions">
-            <button id="priceImportBtn" class="btn btn-ghost btn-small" type="button">Import price file</button>
+            <button id="priceImportBtn" class="btn btn-ghost btn-small" type="button">Import KaBuM! prices</button>
             <button id="priceTemplateBtn" class="btn btn-ghost btn-small" type="button">Download template</button>
-            <button id="priceResetBtn" class="link-btn" type="button" hidden>Use reference prices</button>
+            <button id="priceResetBtn" class="link-btn" type="button" hidden>Clear imported prices</button>
           </div>
           <input id="priceImportInput" type="file" accept="application/json,.json" hidden>
         </section>
@@ -237,7 +265,7 @@
 
   <footer class="site-footer">
     <div class="wrap footer-inner">
-      <p>Prices in reais are reference estimates unless they are marked as verified. Check the price and specs on the seller’s page before you buy.</p>
+      <p>Prices are shown only from imported KaBuM! checks, not live offers. Verify the current price and specifications on KaBuM! before buying.</p>
       <p>The 3D preview uses Three.js and needs WebGL in your browser.</p>
     </div>
   </footer>

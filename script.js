@@ -28,7 +28,7 @@ let importedFeed = loadPriceFeed(knownIds);
 let priceMeta = new Map();
 
 function applyFeed(feed) {
-  for (const part of allParts) part.price = originalPrices.get(part.id) ?? part.price;
+  for (const part of allParts) part.price = 0;
   priceMeta = new Map();
   if (feed) {
     for (const item of feed.prices) {
@@ -108,12 +108,18 @@ const stockLabel = (availability) => ({
 }[availability] || 'Stock unknown');
 
 function renderPresets() {
-  $('presets').innerHTML = Object.entries(presetInfo).map(([name, info]) => {
+  const scratch = `<button class="preset preset-scratch${activePreset === 'scratch' ? ' is-active' : ''}" type="button" data-preset="scratch" aria-pressed="${activePreset === 'scratch'}">
+    <span class="preset-label">Build from scratch</span>
+    <span class="preset-blurb">Start with no parts selected and choose each component yourself.</span>
+    <span class="preset-total">Empty build</span>
+  </button>`;
+  $('presets').innerHTML = scratch + Object.entries(presetInfo).map(([name, info]) => {
     const isActive = activePreset === name;
+    const missing = missingPriceCount(presets[name]);
     return `<button class="preset${isActive ? ' is-active' : ''}" type="button" data-preset="${escapeHTML(name)}" aria-pressed="${isActive}">
       <span class="preset-label">${escapeHTML(info.label)}</span>
       <span class="preset-blurb">${escapeHTML(info.blurb)}</span>
-      <span class="preset-total">${money(totalPrice(presets[name]))}</span>
+      <span class="preset-total">${missing ? `${missing} prices missing` : money(totalPrice(presets[name]))}</span>
     </button>`;
   }).join('');
 }
@@ -134,12 +140,14 @@ function renderTabs() {
 function partCard(part, cat) {
   const isChosen = selected[cat] === part.id;
   const source = priceMeta.get(part.id);
+  const hasReferencePrice = (originalPrices.get(part.id) || 0) > 0;
   const quick = quickSpecs(cat, part).map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join('');
   const full = specRows(cat, part).map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join('');
-  const priceText = part.price === 0 ? 'No extra cost' : money(part.price);
-  const priceSource = source ? `Verified from ${escapeHTML(source.source)}` : 'Reference price';
+  const priceText = source ? money(part.price) : hasReferencePrice ? 'Unpriced' : 'No extra cost';
+  const priceSource = source ? `Checked on KaBuM ${escapeHTML(importedFeed.checkedAt)}` : hasReferencePrice ? 'No KaBuM price imported' : 'No extra cost';
   const stock = source ? `<span class="stock stock-${escapeHTML(source.availability)}">${stockLabel(source.availability)}</span>` : '';
-  const offer = source ? `<a class="offer-link" href="${escapeHTML(source.url)}" target="_blank" rel="noopener noreferrer">View offer</a>` : '';
+  const offerUrl = source?.url || `https://www.kabum.com.br/busca/${encodeURIComponent(part.name)}`;
+  const offer = `<a class="offer-link" href="${escapeHTML(offerUrl)}" target="_blank" rel="noopener noreferrer">${source ? 'View KaBuM offer' : 'Search on KaBuM'}</a>`;
 
   return `<article class="part-card${isChosen ? ' is-chosen' : ''}">
     <div class="part-top">
@@ -181,8 +189,25 @@ function renderParts() {
 
   const query = $('partSearch').value.trim().toLowerCase();
   let items = [...catalog[activeCategory]];
+  const isCpu = activeCategory === 'cpu';
+  const isGpu = activeCategory === 'gpu';
+  $('cpuVendorFilterWrap').hidden = !isCpu;
+  $('cpuGenerationFilterWrap').hidden = !isCpu;
+  $('gpuVendorFilterWrap').hidden = !isGpu;
+  $('gpuGenerationFilterWrap').hidden = !isGpu;
+  if (isCpu || isGpu) {
+    const select = $(isCpu ? 'cpuGenerationFilter' : 'gpuGenerationFilter');
+    const priorValue = select.value;
+    const generations = [...new Set(items.map((part) => part.generation))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const label = isCpu ? 'All CPU generations' : 'All GPU generations';
+    select.innerHTML = `<option value="">${label}</option>${generations.map((generation) => `<option value="${escapeHTML(generation)}">${escapeHTML(generation)}</option>`).join('')}`;
+    if (generations.includes(priorValue)) select.value = priorValue;
+    const vendor = $(isCpu ? 'cpuVendorFilter' : 'gpuVendorFilter').value;
+    const generation = select.value;
+    items = items.filter((part) => (!vendor || part.vendor === vendor) && (!generation || part.generation === generation));
+  }
   if ($('fitOnly').checked) items = items.filter((part) => compatibleCandidate(activeCategory, part));
-  if (query) items = items.filter((part) => `${part.name} ${part.short} ${part.tag || ''} ${part.desc}`.toLowerCase().includes(query));
+  if (query) items = items.filter((part) => `${part.name} ${part.short} ${part.tag || ''} ${part.desc} ${part.vendor || ''} ${part.generation || ''}`.toLowerCase().includes(query));
   const sort = $('sortBy').value;
   if (sort === 'low') items.sort((a, b) => a.price - b.price);
   if (sort === 'high') items.sort((a, b) => b.price - a.price);
@@ -200,35 +225,51 @@ function renderProgress() {
 
 function renderSummary() {
   const total = totalPrice(selected);
+  const missing = missingPriceCount(selected);
+  const unselected = categories.length - categories.filter((cat) => Boolean(getPart(selected, cat))).length;
   const budget = Number($('budget').value);
   const diff = budget - total;
-  $('totalPrice').textContent = money(total);
+  $('totalPrice').textContent = missing ? `Partial · ${money(total)}` : money(total);
   $('wattOut').textContent = `about ${estimateWatts(selected)} W`;
   $('budgetOut').textContent = money(budget);
   $('budgetFill').style.width = `${Math.min(100, (total / budget) * 100)}%`;
   $('budgetFill').classList.toggle('is-over', total > budget);
-  $('budgetNote').textContent = diff < 0
-    ? `${money(-diff)} over budget. A cheaper graphics card or processor would close the gap.`
-    : diff === 0 ? 'Exactly on budget.' : `${money(diff)} left to spend.`;
+  $('budgetNote').textContent = unselected
+    ? `${unselected} part${unselected === 1 ? ' is' : 's are'} not selected yet; totals are incomplete.${missing ? ` ${missing} selected item${missing === 1 ? ' has' : 's have'} no imported KaBuM price.` : ''}`
+    : missing
+      ? `${missing} selected item${missing === 1 ? ' has' : 's have'} no imported KaBuM price; this total and budget comparison are partial.`
+    : diff < 0
+      ? `${money(-diff)} over budget. A cheaper graphics card or processor would close the gap.`
+      : diff === 0 ? 'Exactly on budget.' : `${money(diff)} left to spend.`;
   $('list').innerHTML = categories.map((cat) => {
     const part = getPart(selected, cat);
-    const price = part ? (part.price ? money(part.price) : 'Included') : '';
+    const price = part
+      ? priceMeta.has(part.id) ? money(part.price) : (originalPrices.get(part.id) || 0) > 0 ? 'KaBuM price missing' : 'Included'
+      : '';
     return `<li><span class="sum-cat">${escapeHTML(categoryInfo[cat].label)}</span><span class="sum-name">${escapeHTML(part?.name || 'Not chosen yet')}</span><span class="sum-price">${escapeHTML(price)}</span></li>`;
   }).join('');
+}
+
+function missingPriceCount(build) {
+  return categories.reduce((count, cat) => {
+    const part = getPart(build, cat);
+    return count + (part && (originalPrices.get(part.id) || 0) > 0 && !priceMeta.has(part.id) ? 1 : 0);
+  }, 0);
 }
 
 function renderCompatibility() {
   const report = evaluate(selected);
   const errors = report.errors.length;
   const warnings = report.warnings.length;
-  const tone = errors ? 'bad' : warnings ? 'warn' : 'good';
+  const tone = errors ? 'bad' : warnings || report.incomplete ? 'warn' : 'good';
   $('status').className = `status status-${tone}`;
   $('statusTitle').textContent = errors
     ? `${errors} thing${errors > 1 ? 's' : ''} to fix`
-    : warnings ? 'Fits, with a few notes' : 'Everything fits together';
+    : report.incomplete ? 'Build in progress' : warnings ? 'Fits, with a few notes' : 'Everything fits together';
   $('statusText').textContent = errors
     ? 'Fix these before you buy anything.'
-    : warnings ? 'Read the notes below before you order.' : 'Every check below passes for these parts.';
+    : report.incomplete ? 'Choose the remaining parts to complete the compatibility checks.'
+      : warnings ? 'Read the notes below before you order.' : 'Every check below passes for these parts.';
   $('checks').innerHTML = report.checks.map((item) => {
     const state = item.ok ? 'pass' : item.severity === 'warn' ? 'warn' : 'fix';
     const badge = item.ok ? 'Pass' : item.severity === 'warn' ? 'Check' : 'Fix';
@@ -250,7 +291,7 @@ function gameRow(game) {
   if (game.fps === null) {
     return `<li class="game-row is-empty">
       <div class="game-info"><strong>${escapeHTML(game.name)}</strong><span>${escapeHTML(game.genre)}</span></div>
-      <p class="game-note">Needs a graphics card</p>
+      <p class="game-note">${escapeHTML(game.note || 'Needs a graphics card')}</p>
     </li>`;
   }
   const width = Math.min(100, (game.fps / 144) * 100).toFixed(1);
@@ -282,12 +323,12 @@ function renderGames() {
 function renderPriceStatus() {
   $('priceResetBtn').hidden = !importedFeed;
   if (!importedFeed) {
-    $('priceStatus').textContent = 'Prices are reference estimates typed in by hand. Import a verified price file to replace them.';
+    $('priceStatus').textContent = 'No KaBuM price file is loaded. Unverified prices are hidden; search KaBuM or import a checked KaBuM price file.';
     return;
   }
   const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${importedFeed.checkedAt}T00:00:00Z`));
   const count = importedFeed.prices.length;
-  $('priceStatus').textContent = `${count} verified price${count === 1 ? '' : 's'} imported, checked ${date}. Other parts keep their reference prices.`;
+  $('priceStatus').textContent = `${count} KaBuM price${count === 1 ? '' : 's'} imported, checked ${date}. Other item prices remain unavailable; listed prices are not live.`;
 }
 
 function renderAll() {
@@ -326,12 +367,34 @@ function setPreset(name) {
   showToast('Build loaded. Change any part you like.');
 }
 
+function setScratchBuild() {
+  selected = Object.fromEntries(categories.map((category) => [category, '']));
+  activePreset = 'scratch';
+  activeCategory = 'cpu';
+  $('partSearch').value = '';
+  $('cpuVendorFilter').value = '';
+  $('cpuGenerationFilter').value = '';
+  $('gpuVendorFilter').value = '';
+  $('gpuGenerationFilter').value = '';
+  $('sortBy').value = 'default';
+  renderAll();
+  rebuild3D();
+  document.querySelector('.builder-main').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast('Empty build started. Choose each part to continue.');
+}
+
 function copyBuild() {
   const rows = categories.map((cat) => {
     const part = getPart(selected, cat);
-    return `${categoryInfo[cat].label}: ${part?.name || 'Not chosen'} (${part ? money(part.price) : '-'})`;
+    const price = !part ? '-' : priceMeta.has(part.id) ? money(part.price) : (originalPrices.get(part.id) || 0) > 0 ? 'KaBuM price missing' : 'Included';
+    return `${categoryInfo[cat].label}: ${part?.name || 'Not chosen'} (${price})`;
   });
-  const content = `BuildBuddy parts list\n\n${rows.join('\n')}\n\nTotal: ${money(totalPrice(selected))}\nEstimated peak draw: about ${estimateWatts(selected)} W\n\nPrices are reference estimates unless marked as verified. Frame rates are planning estimates, not benchmark results.`;
+  const missing = missingPriceCount(selected);
+  const unselected = categories.filter((cat) => !getPart(selected, cat)).length;
+  const totalLabel = unselected
+    ? `Build incomplete: ${unselected} parts not selected`
+    : missing ? `Partial KaBuM total: ${money(totalPrice(selected))} (${missing} prices missing)` : `KaBuM total: ${money(totalPrice(selected))}`;
+  const content = `BuildBuddy parts list\n\n${rows.join('\n')}\n\n${totalLabel}\nEstimated peak draw: about ${estimateWatts(selected)} W\n\nKaBuM prices are imported checks, not live offers. Frame rates are planning estimates, not benchmark results.`;
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(content).then(() => showToast('Parts list copied.')).catch(() => fallbackCopy(content));
   else fallbackCopy(content);
 }
@@ -347,10 +410,12 @@ function importPriceFeedFile(file) {
   file.text().then((content) => {
     const raw = JSON.parse(content);
     const feed = validatePriceFeed(raw, knownIds);
-    savePriceFeed(feed);
+    const saved = savePriceFeed(feed);
     applyFeed(feed);
     renderAll();
-    showToast(`Imported ${feed.prices.length} verified prices.`);
+    showToast(saved
+      ? `Imported ${feed.prices.length} KaBuM prices.`
+      : 'KaBuM prices loaded for this visit, but could not be saved in this browser.');
   }).catch((error) => showToast(error?.message || 'Could not read the price file.'));
 }
 function downloadJson(filename, data) {
@@ -367,7 +432,7 @@ $('priceImportInput').addEventListener('change', (event) => {
 });
 $('priceTemplateBtn').addEventListener('click', () => downloadJson('buildbuddy-price-update-template.json', makePriceTemplate()));
 $('priceResetBtn').addEventListener('click', () => {
-  clearPriceFeed(); applyFeed(null); renderAll(); showToast('Restored the reference prices.');
+  clearPriceFeed(); applyFeed(null); renderAll(); showToast('Cleared imported KaBuM prices.');
 });
 
 // ---------- 3D PC builder ----------
@@ -487,22 +552,32 @@ function rebuild3D() {
   scene.add(pcRoot);
   const parts = currentParts();
   try {
-    const anchors = buildCase(kit, parts.case, parts.fans);
+    const previewCase = parts.case || getPart({ case: 'mesh' }, 'case');
+    const previewFans = parts.fans || getPart({ fans: 'included' }, 'fans');
+    const previewLighting = parts.lighting || getPart({ lighting: 'off' }, 'lighting');
+    const anchors = buildCase(kit, previewCase, previewFans, parts.psu);
     modelParts.case = anchors.group;
     pcRoot.add(anchors.group);
-    const board = buildBoard(kit, anchors, { ...parts, board: parts.motherboard });
-    modelParts.board = board.group;
-    modelParts.board.userData.baseZ = board.group.position.z;
-    pcRoot.add(board.group);
-    const storage = buildStorage(kit, parts.storage, anchors);
-    modelParts.storage = storage;
-    if (storage) pcRoot.add(storage);
-    const gpu = buildGpu(kit, parts.gpu, anchors, board);
-    modelParts.gpu = gpu;
-    if (gpu) { gpu.userData.baseZ = gpu.position.z; pcRoot.add(gpu); }
-    const cables = buildCables(kit, anchors, board, gpu, parts.cpu);
-    modelParts.cables = cables;
-    pcRoot.add(cables);
+    modelParts.board = null;
+    modelParts.storage = null;
+    modelParts.gpu = null;
+    modelParts.cables = null;
+    const hasBoardComponents = [parts.cpu, parts.cooler, parts.motherboard, parts.ram, parts.storage].every(Boolean);
+    if (hasBoardComponents) {
+      const board = buildBoard(kit, anchors, { ...parts, board: parts.motherboard });
+      modelParts.board = board.group;
+      modelParts.board.userData.baseZ = board.group.position.z;
+      pcRoot.add(board.group);
+      const storage = buildStorage(kit, parts.storage, anchors);
+      modelParts.storage = storage;
+      if (storage) pcRoot.add(storage);
+      const gpu = buildGpu(kit, parts.gpu, board);
+      modelParts.gpu = gpu;
+      if (gpu) { gpu.userData.baseZ = gpu.position.z; pcRoot.add(gpu); }
+      const cables = buildCables(kit, anchors, board, gpu, parts.cpu);
+      modelParts.cables = cables;
+      pcRoot.add(cables);
+    }
     modelParts.glass = [];
     pcRoot.traverse((object) => {
       if (object.isMesh && object.userData.isGlass) modelParts.glass.push(object);
@@ -511,7 +586,7 @@ function rebuild3D() {
         object.receiveShadow = false;
       }
     });
-    const light = new THREE.PointLight(parts.lighting.color || 0x35e0ff, 3.2, 6.5);
+    const light = new THREE.PointLight(previewLighting.color || 0x35e0ff, 3.2, 6.5);
     light.position.set(1.2, 2.5, 1.1); pcRoot.add(light); kit.addLight(light, 3.2);
     const interiorFill = new THREE.PointLight(0xffedcf, 13, 8, 1.7);
     interiorFill.position.set(-0.2, 2.7, 1.25); pcRoot.add(interiorFill);
@@ -519,11 +594,14 @@ function rebuild3D() {
     lowerFill.position.set(-1.25, 1.35, 0.55); pcRoot.add(lowerFill);
     const boardFill = new THREE.PointLight(0xffffff, 8, 5, 1.6);
     boardFill.position.set(-0.2, 3.1, 2.1); pcRoot.add(boardFill);
-    kit.setLighting(parts.lighting.mode, colorHex(parts.lighting.color), lightingOn);
+    kit.setLighting(previewLighting.mode, colorHex(previewLighting.color), lightingOn);
     update3DControls();
-    setStageTip('Drag to turn · scroll to zoom · click a part to open its step');
-    $('fanHud').textContent = `${anchors.fanCount + (parts.gpu.id === 'none' ? 0 : (parts.gpu.kind === 'triple' ? 3 : 2))} fans, animated`;
-    $('caseHud').textContent = parts.case.name;
+    setStageTip(hasBoardComponents
+      ? 'Drag to turn · scroll to zoom · click a part to open its step'
+      : 'Choose a CPU, cooler, motherboard, RAM and storage to preview the interior.');
+    const gpuFans = !parts.gpu || parts.gpu.id === 'none' ? 0 : parts.gpu.kind === 'triple' ? 3 : 2;
+    $('fanHud').textContent = `${anchors.fanCount + gpuFans} fans, animated`;
+    $('caseHud').textContent = parts.case ? parts.case.name : `Preview case · ${previewCase.name}`;
   } catch (error) {
     console.error('3D rebuild failed:', error);
     setStageTip(`The 3D model could not be built: ${error?.message || 'unknown error'}. Try another part or build.`, true);
@@ -532,7 +610,7 @@ function rebuild3D() {
 
 function update3DControls() {
   if (!kit) return;
-  const lighting = getPart(selected, 'lighting');
+  const lighting = getPart(selected, 'lighting') || getPart({ lighting: 'off' }, 'lighting');
   kit.setLighting(lighting.mode, colorHex(lighting.color), lightingOn);
   for (const mesh of (modelParts.glass || [])) { mesh.visible = showGlass; }
   if (modelParts.board) modelParts.board.position.z = (modelParts.board.userData.baseZ ?? modelParts.board.position.z) - exploded * 0.006;
@@ -596,7 +674,10 @@ $('parts').addEventListener('toggle', (event) => {
   if (event.target.open) openDetails.add(id); else openDetails.delete(id);
 }, true);
 $('presets').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-preset]'); if (button) setPreset(button.dataset.preset);
+  const button = event.target.closest('[data-preset]');
+  if (!button) return;
+  if (button.dataset.preset === 'scratch') setScratchBuild();
+  else setPreset(button.dataset.preset);
 });
 $('resolutions').addEventListener('click', (event) => {
   const button = event.target.closest('[data-res]');
@@ -607,6 +688,10 @@ $('resolutions').addEventListener('click', (event) => {
 $('fitOnly').addEventListener('change', renderParts);
 $('sortBy').addEventListener('change', renderParts);
 $('partSearch').addEventListener('input', renderParts);
+$('cpuVendorFilter').addEventListener('change', renderParts);
+$('cpuGenerationFilter').addEventListener('change', renderParts);
+$('gpuVendorFilter').addEventListener('change', renderParts);
+$('gpuGenerationFilter').addEventListener('change', renderParts);
 $('prevBtn').addEventListener('click', () => stepBy(-1));
 $('nextBtn').addEventListener('click', () => stepBy(1));
 $('budget').addEventListener('input', renderSummary);

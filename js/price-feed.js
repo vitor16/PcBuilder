@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'buildbuddy.priceFeed.v1';
+const STORAGE_KEY = 'buildbuddy.priceFeed.v2';
 
 function validDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -8,7 +8,8 @@ function validDate(value) {
 
 export function validatePriceFeed(raw, knownIds) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('The file must contain a JSON object.');
-  if (raw.schemaVersion !== 1) throw new Error('Unsupported file format. Expected schemaVersion 1.');
+  if (raw.schemaVersion !== 2) throw new Error('Unsupported file format. Expected schemaVersion 2.');
+  if (raw.retailer !== 'KaBuM!') throw new Error('The price file must be identified as a KaBuM! price file.');
   if (raw.currency !== 'BRL') throw new Error('The price file must use BRL currency.');
   if (!validDate(raw.checkedAt)) throw new Error('checkedAt must be a valid date in YYYY-MM-DD format.');
   if (!Array.isArray(raw.prices)) throw new Error('The prices field must be an array.');
@@ -20,15 +21,20 @@ export function validatePriceFeed(raw, knownIds) {
     if (seen.has(item.id)) throw new Error(`Duplicate item ID: ${item.id}.`);
     seen.add(item.id);
     if (typeof item.price !== 'number' || !Number.isFinite(item.price) || item.price < 0) throw new Error(`Invalid BRL price for ${item.id}.`);
-    if (typeof item.source !== 'string' || !item.source.trim()) throw new Error(`Missing retailer/source for ${item.id}.`);
+    if (typeof item.source !== 'string' || item.source.trim().toLowerCase() !== 'kabum!') {
+      throw new Error(`Price for ${item.id} must come from KaBuM!.`);
+    }
     let url;
     try { url = new URL(item.url); } catch { throw new Error(`Invalid product URL for ${item.id}.`); }
     if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Product URL for ${item.id} must use HTTP or HTTPS.`);
+    if (url.hostname !== 'kabum.com.br' && !url.hostname.endsWith('.kabum.com.br')) {
+      throw new Error(`Product URL for ${item.id} must be on kabum.com.br.`);
+    }
     if (!['in_stock', 'out_of_stock', 'unknown'].includes(item.availability)) throw new Error(`Invalid availability for ${item.id}.`);
     return { id: item.id, price: item.price, source: item.source.trim(), url: url.href, availability: item.availability };
   });
 
-  return { schemaVersion: 1, checkedAt: raw.checkedAt, currency: 'BRL', prices };
+  return { schemaVersion: 2, retailer: 'KaBuM!', checkedAt: raw.checkedAt, currency: 'BRL', prices };
 }
 
 export function loadPriceFeed(knownIds) {
@@ -61,7 +67,8 @@ export function clearPriceFeed() {
 
 export function makePriceTemplate() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    retailer: 'KaBuM!',
     checkedAt: new Date().toISOString().slice(0, 10),
     currency: 'BRL',
     prices: []

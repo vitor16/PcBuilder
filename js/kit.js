@@ -34,8 +34,8 @@ export function createKit() {
     pcbGpu: std({ color: 0xffffff, map: TX.pcbTexture({ base: '#0d1a14', trace: '#1c3a2e', seed: 11 }), roughness: 0.55, metalness: 0.25 }),
     vent: std({ color: 0x090b0e, metalness: 0.7, roughness: 0.5, alphaMap: perf, alphaTest: 0.5, side: THREE.DoubleSide }),
     glass: new THREE.MeshPhysicalMaterial({
-      color: 0xc4e5f1, transparent: true, opacity: 0.1, roughness: 0.1, metalness: 0.02,
-      clearcoat: 0.95, clearcoatRoughness: 0.06, envMapIntensity: 0.65,
+      color: 0xd8eff8, transparent: true, opacity: 0.16, roughness: 0.12, metalness: 0,
+      clearcoat: 1, clearcoatRoughness: 0.035, envMapIntensity: 1,
       side: THREE.FrontSide, depthWrite: false
     }),
     fanFrame: std({ color: 0x0f1317, metalness: 0.3, roughness: 0.5 }),
@@ -148,8 +148,10 @@ export function createKit() {
   const ringGeo = new THREE.TorusGeometry(0.455, 0.018, 8, 48);
   const hubGeo = new THREE.CylinderGeometry(0.1, 0.11, 0.08, 28);
   const hubCapGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.012, 28);
+  const hubDetailRingGeo = new THREE.TorusGeometry(0.058, 0.006, 6, 24);
+  const hubDotGeo = new THREE.CircleGeometry(0.022, 20);
   const spokeGeo = new THREE.BoxGeometry(0.4, 0.03, 0.03);
-  const sharedGeometries = new Set([bladeGeo, frameGeo, ringGeo, hubGeo, hubCapGeo, spokeGeo]);
+  const sharedGeometries = new Set([bladeGeo, frameGeo, ringGeo, hubGeo, hubCapGeo, hubDetailRingGeo, hubDotGeo, spokeGeo]);
 
   const fans = [];
   /**
@@ -176,11 +178,14 @@ export function createKit() {
     }
     const hub = new THREE.Mesh(hubGeo, mats.plasticLight); hub.rotation.x = Math.PI / 2; rotor.add(hub);
     const cap = new THREE.Mesh(hubCapGeo, rgb ? mats.glow : mats.plasticLight); cap.rotation.x = Math.PI / 2; cap.position.z = 0.045; rotor.add(cap);
+    const hubRing = new THREE.Mesh(hubDetailRingGeo, mats.silver); hubRing.position.z = 0.052; rotor.add(hubRing);
+    const hubDot = new THREE.Mesh(hubDotGeo, mats.aluminiumDark); hubDot.position.z = 0.054; rotor.add(hubDot);
     fan.add(rotor);
     // struts behind the rotor
     for (let i = 0; i < 3; i++) {
       const s = new THREE.Mesh(spokeGeo, mats.fanFrame); s.rotation.z = (i / 3) * Math.PI; s.position.z = -0.08; fan.add(s);
     }
+    for (const x of [-0.42, 0.42]) for (const y of [-0.42, 0.42]) screw(fan, x, y, 0.102, 0.018);
     fan.scale.setScalar(diameter);
     fan.userData.rotor = rotor;
     fan.userData.speed = spin ? 1 : 0;

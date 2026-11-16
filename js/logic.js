@@ -48,11 +48,11 @@ export function evaluate(selected) {
     if (!ok) (severity === 'error' ? errors : warnings).push({ text: bad, fixCat: fix });
   };
 
-  const hasGpu = gpu.id !== 'none';
+  const hasGpu = Boolean(gpu && gpu.id !== 'none');
   const draw = estimateWatts(selected);
   const recommendedPsu = Math.ceil((draw * 1.3) / 50) * 50;
 
-  rule({
+  if (cpu && board) rule({
     label: 'Processor fits the board',
     ok: cpu.socket === board.socket,
     good: `Both use the ${cpu.socket} socket`,
@@ -60,23 +60,23 @@ export function evaluate(selected) {
     fix: 'motherboard'
   });
 
-  rule({
-    label: 'Memory type matches',
-    ok: board.ram === ram.type,
-    good: `${ram.type} memory works with this board`,
-    bad: `This board takes ${board.ram} memory, but the kit is ${ram.type}. The sticks will not fit the slots.`,
-    fix: 'ram'
-  });
-
-  rule({
-    label: 'Memory fits the slots',
-    ok: ram.sticks <= board.slots,
-    good: `${ram.sticks} sticks fit in ${board.slots} slots`,
-    bad: `The kit has ${ram.sticks} sticks, but this board only has ${board.slots} slots. Choose a kit with fewer sticks or a board with more slots.`,
-    fix: 'ram'
-  });
-
-  rule({
+  if (board && ram) {
+    rule({
+      label: 'Memory type matches',
+      ok: board.ram === ram.type,
+      good: `${ram.type} memory works with this board`,
+      bad: `This board takes ${board.ram} memory, but the kit is ${ram.type}. The sticks will not fit the slots.`,
+      fix: 'ram'
+    });
+    rule({
+      label: 'Memory fits the slots',
+      ok: ram.sticks <= board.slots,
+      good: `${ram.sticks} sticks fit in ${board.slots} slots`,
+      bad: `The kit has ${ram.sticks} sticks, but this board only has ${board.slots} slots. Choose a kit with fewer sticks or a board with more slots.`,
+      fix: 'ram'
+    });
+  }
+  if (ram) rule({
     label: 'Enough memory',
     ok: ram.capacity >= 16,
     good: `${ram.capacity} GB is enough for modern games`,
@@ -84,41 +84,36 @@ export function evaluate(selected) {
     severity: 'warn',
     fix: 'ram'
   });
-
-  rule({
+  if (cpu && gpu) rule({
     label: 'Something shows the picture',
     ok: hasGpu || cpu.igpu,
     good: hasGpu ? `${gpu.name} will drive the screen` : `${cpu.name} has built-in graphics`,
     bad: `${cpu.name} has no built-in graphics, so the screen will stay blank without a graphics card.`,
     fix: 'gpu'
   });
-
-  rule({
+  if (board && pcCase) rule({
     label: 'Board fits the case',
     ok: pcCase.forms.includes(board.form),
     good: `A ${formLabel(board.form)} board fits this case`,
     bad: `A ${formLabel(board.form)} board does not fit the ${pcCase.name}. This case takes ${pcCase.forms.map(formLabel).join(' or ')}.`,
     fix: 'case'
   });
-
-  rule({
+  if (gpu && pcCase) rule({
     label: 'Graphics card fits the case',
     ok: !hasGpu || gpu.length <= pcCase.maxGpu,
     good: hasGpu ? `The ${gpu.length} mm card fits, with room to spare` : 'No graphics card to fit',
     bad: `The card is ${gpu.length} mm long, but this case takes up to ${pcCase.maxGpu} mm.`,
     fix: 'gpu'
   });
-
-  rule({
+  if (cooler && cpu) rule({
     label: 'Cooler works with the processor',
     ok: cooler.sockets.includes(cpu.socket),
     good: `Works with ${cpu.socket}`,
     bad: `This cooler does not list support for ${cpu.socket}.`,
     fix: 'cooler'
   });
-
-  const isLiquid = cooler.kind === 'aio';
-  rule({
+  const isLiquid = cooler?.kind === 'aio';
+  if (cooler && pcCase) rule({
     label: 'Cooler fits the case',
     ok: isLiquid ? pcCase.radiators.includes(cooler.radiator) : cooler.height <= pcCase.maxCooler,
     good: isLiquid
@@ -129,16 +124,14 @@ export function evaluate(selected) {
       : `This cooler is ${cooler.height} mm tall, but this case allows up to ${pcCase.maxCooler} mm.`,
     fix: 'cooler'
   });
-
-  rule({
+  if (cooler && cpu) rule({
     label: 'Processor has a cooler',
     ok: !(cooler.needsBox && !cpu.boxCooler),
     good: cooler.needsBox ? 'The boxed cooler ships with this chip' : 'Your chosen cooler covers this chip',
     bad: `${cpu.name} does not come with a cooler. Choose a separate cooler.`,
     fix: 'cooler'
   });
-
-  rule({
+  if (psu && (cpu || gpu)) rule({
     label: 'Power supply has room',
     ok: psu.watts >= draw * 1.15,
     good: `${psu.watts} W covers the build’s estimated ${draw} W with room to spare`,
@@ -146,8 +139,7 @@ export function evaluate(selected) {
     severity: 'warn',
     fix: 'psu'
   });
-
-  rule({
+  if (psu && gpu) rule({
     label: 'Power supply meets the card’s needs',
     ok: !hasGpu || psu.watts >= gpu.minPsu,
     good: 'Meets the card maker’s minimum',
@@ -155,8 +147,7 @@ export function evaluate(selected) {
     severity: 'warn',
     fix: 'psu'
   });
-
-  rule({
+  if (cooler && cpu) rule({
     label: 'Cooler can handle the heat',
     ok: cooler.capacity >= cpu.tdp * 1.1,
     good: `Handles the ${cpu.tdp} W this chip gives off`,
@@ -164,8 +155,7 @@ export function evaluate(selected) {
     severity: 'warn',
     fix: 'cooler'
   });
-
-  rule({
+  if (fans && cooler && pcCase) rule({
     label: 'Top fans have room',
     ok: !(fans.extra > 0 && isLiquid && cooler.radiator >= 240 && ['compact', 'mini', 'cube'].includes(pcCase.style)),
     good: 'The top fans clear the cooler',
@@ -174,7 +164,7 @@ export function evaluate(selected) {
     fix: 'fans'
   });
 
-  if (cpu.id === 'r5600g' && board.id === 'a520m') {
+  if (cpu?.id === 'r5600g' && board?.id === 'a520m') {
     rule({
       label: 'Board BIOS version',
       ok: false,
@@ -184,7 +174,7 @@ export function evaluate(selected) {
     });
   }
 
-  if (storage.gen4 && board.id === 'a520m') {
+  if (storage?.gen4 && board?.id === 'a520m') {
     rule({
       label: 'Drive speed on this board',
       ok: false,
@@ -194,7 +184,8 @@ export function evaluate(selected) {
     });
   }
 
-  return { errors, warnings, checks, draw };
+  const incomplete = categories.some((category) => !getPart(selected, category));
+  return { errors, warnings, checks, draw, incomplete };
 }
 
 /** Plain-language details for a part. The first three rows are the quick summary on each card. */
@@ -203,6 +194,8 @@ export function specRows(cat, p) {
   switch (cat) {
     case 'cpu':
       return [
+        ['Vendor', p.vendor],
+        ['Generation', p.generation],
         ['Cores and threads', `${p.cores} cores, ${p.threads} threads`],
         ['Socket', p.socket],
         ['Boost speed', `${p.boost} GHz`],
@@ -245,8 +238,10 @@ export function specRows(cat, p) {
         ...(p.profile ? [['Memory profile', p.profile]] : [])
       ];
     case 'gpu':
-      if (p.id === 'none') return [['Graphics', 'Uses the processor’s built-in graphics']];
+      if (p.id === 'none') return [['Graphics', 'Uses the processor’s built-in graphics'], ['Generation', p.generation]];
       return [
+        ['Vendor', p.vendor],
+        ['Generation', p.generation],
         ['Video memory', `${p.vram} GB ${p.mem}`],
         ['Card length', `${p.length} mm`],
         ['Typical power', `about ${p.watts} W`],
@@ -350,6 +345,12 @@ export function estimateGames(selected, resolutionId = '1080') {
   const cpu = getPart(selected, 'cpu');
   const gpu = getPart(selected, 'gpu');
   const res = RESOLUTIONS.find((r) => r.id === resolutionId) || RESOLUTIONS[0];
+  if (!cpu || !gpu) {
+    const note = !cpu
+      ? 'Choose a processor and graphics option to estimate frame rates.'
+      : 'Choose a graphics card or select no graphics card to estimate frame rates.';
+    return games.map((g) => ({ ...g, fps: null, verdict: fpsVerdict(null), integrated: false, note }));
+  }
   const integrated = !gpu || gpu.id === 'none';
   const level = integrated ? (cpu.igpu ? cpu.igpuScore : 0) : gpu.score;
   const cpuAdj = 1 + (cpu.cpuScore - 1) * 0.55;
@@ -368,6 +369,7 @@ export function gamesSummary(results, resolutionId = '1080') {
   const res = RESOLUTIONS.find((r) => r.id === resolutionId) || RESOLUTIONS[0];
   const playable = results.filter((g) => g.fps !== null);
   if (!playable.length) {
+    if (results[0]?.note) return results[0].note;
     return 'This build has no graphics. Add a graphics card, or pick a processor with built-in graphics, to see game estimates.';
   }
   const smooth = playable.filter((g) => g.fps >= FPS_TARGET).length;
