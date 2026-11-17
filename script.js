@@ -28,7 +28,7 @@ let importedFeed = loadPriceFeed(knownIds);
 let priceMeta = new Map();
 
 function applyFeed(feed) {
-  for (const part of allParts) part.price = 0;
+  for (const part of allParts) part.price = originalPrices.get(part.id) || 0;
   priceMeta = new Map();
   if (feed) {
     for (const item of feed.prices) {
@@ -119,7 +119,7 @@ function renderPresets() {
     return `<button class="preset${isActive ? ' is-active' : ''}" type="button" data-preset="${escapeHTML(name)}" aria-pressed="${isActive}">
       <span class="preset-label">${escapeHTML(info.label)}</span>
       <span class="preset-blurb">${escapeHTML(info.blurb)}</span>
-      <span class="preset-total">${missing ? `${missing} prices missing` : money(totalPrice(presets[name]))}</span>
+      <span class="preset-total">${missing ? `${missing} prices missing` : `~${money(totalPrice(presets[name]))}`}</span>
     </button>`;
   }).join('');
 }
@@ -140,11 +140,11 @@ function renderTabs() {
 function partCard(part, cat) {
   const isChosen = selected[cat] === part.id;
   const source = priceMeta.get(part.id);
-  const hasReferencePrice = (originalPrices.get(part.id) || 0) > 0;
+  const referencePrice = originalPrices.get(part.id) || 0;
   const quick = quickSpecs(cat, part).map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join('');
   const full = specRows(cat, part).map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join('');
-  const priceText = source ? money(part.price) : hasReferencePrice ? 'Unpriced' : 'No extra cost';
-  const priceSource = source ? `Checked on KaBuM ${escapeHTML(importedFeed.checkedAt)}` : hasReferencePrice ? 'No KaBuM price imported' : 'No extra cost';
+  const priceText = source ? money(part.price) : referencePrice > 0 ? `~${money(referencePrice)}` : 'No extra cost';
+  const priceSource = source ? `Checked on KaBuM ${escapeHTML(importedFeed.checkedAt)}` : referencePrice > 0 ? 'Catalog estimate · verify current offer' : 'Free, included or visual-only';
   const stock = source ? `<span class="stock stock-${escapeHTML(source.availability)}">${stockLabel(source.availability)}</span>` : '';
   const offerUrl = source?.url || `https://www.kabum.com.br/busca/${encodeURIComponent(part.name)}`;
   const offer = `<a class="offer-link" href="${escapeHTML(offerUrl)}" target="_blank" rel="noopener noreferrer">${source ? 'View KaBuM offer' : 'Search on KaBuM'}</a>`;
@@ -230,22 +230,22 @@ function renderSummary() {
   const unselected = categories.length - categories.filter((cat) => Boolean(getPart(selected, cat))).length;
   const budget = Number($('budget').value);
   const diff = budget - total;
-  $('totalPrice').textContent = missing ? `Partial · ${money(total)}` : money(total);
+  $('totalPrice').textContent = missing ? `Partial · ${money(total)}` : `~${money(total)}`;
   $('wattOut').textContent = `about ${estimateWatts(selected)} W`;
   $('budgetOut').textContent = money(budget);
   $('budgetFill').style.width = `${Math.min(100, (total / budget) * 100)}%`;
   $('budgetFill').classList.toggle('is-over', total > budget);
   $('budgetNote').textContent = unselected
-    ? `${unselected} part${unselected === 1 ? ' is' : 's are'} not selected yet; totals are incomplete.${missing ? ` ${missing} selected item${missing === 1 ? ' has' : 's have'} no imported KaBuM price.` : ''}`
+    ? `${unselected} part${unselected === 1 ? ' is' : 's are'} not selected yet; totals are incomplete.${missing ? ` ${missing} selected item${missing === 1 ? ' has' : 's have'} no catalog price.` : ''}`
     : missing
-      ? `${missing} selected item${missing === 1 ? ' has' : 's have'} no imported KaBuM price; this total and budget comparison are partial.`
+    ? `${missing} selected item${missing === 1 ? ' has' : 's have'} no price; this total and budget comparison are partial.`
     : diff < 0
-      ? `${money(-diff)} over budget. A cheaper graphics card or processor would close the gap.`
-      : diff === 0 ? 'Exactly on budget.' : `${money(diff)} left to spend.`;
+    ? `About ${money(-diff)} over budget. A cheaper graphics card or processor would close the gap.`
+    : diff === 0 ? 'About exactly on budget.' : `About ${money(diff)} left to spend.`;
   $('list').innerHTML = categories.map((cat) => {
     const part = getPart(selected, cat);
     const price = part
-      ? priceMeta.has(part.id) ? money(part.price) : (originalPrices.get(part.id) || 0) > 0 ? 'KaBuM price missing' : 'Included'
+      ? priceMeta.has(part.id) ? money(part.price) : (originalPrices.get(part.id) || 0) > 0 ? `~${money(originalPrices.get(part.id))}` : 'Free / included'
       : '';
     return `<li><span class="sum-cat">${escapeHTML(categoryInfo[cat].label)}</span><span class="sum-name">${escapeHTML(part?.name || 'Not chosen yet')}</span><span class="sum-price">${escapeHTML(price)}</span></li>`;
   }).join('');
@@ -254,7 +254,7 @@ function renderSummary() {
 function missingPriceCount(build) {
   return categories.reduce((count, cat) => {
     const part = getPart(build, cat);
-    return count + (part && (originalPrices.get(part.id) || 0) > 0 && !priceMeta.has(part.id) ? 1 : 0);
+    return count + (part && !Number.isFinite(part.price) ? 1 : 0);
   }, 0);
 }
 
@@ -324,12 +324,12 @@ function renderGames() {
 function renderPriceStatus() {
   $('priceResetBtn').hidden = !importedFeed;
   if (!importedFeed) {
-    $('priceStatus').textContent = 'No KaBuM price file is loaded. Unverified prices are hidden; search KaBuM or import a checked KaBuM price file.';
+    $('priceStatus').textContent = 'Catalog prices are planning estimates, not live offers. Import a checked KaBuM! price file to replace estimates with retailer-verified prices.';
     return;
   }
   const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${importedFeed.checkedAt}T00:00:00Z`));
   const count = importedFeed.prices.length;
-  $('priceStatus').textContent = `${count} KaBuM price${count === 1 ? '' : 's'} imported, checked ${date}. Other item prices remain unavailable; listed prices are not live.`;
+  $('priceStatus').textContent = `${count} KaBuM price${count === 1 ? '' : 's'} imported, checked ${date}. Imported prices replace estimates for those items; all other listed prices are estimates, not live.`;
 }
 
 function renderAll() {
@@ -387,15 +387,15 @@ function setScratchBuild() {
 function copyBuild() {
   const rows = categories.map((cat) => {
     const part = getPart(selected, cat);
-    const price = !part ? '-' : priceMeta.has(part.id) ? money(part.price) : (originalPrices.get(part.id) || 0) > 0 ? 'KaBuM price missing' : 'Included';
+    const price = !part ? '-' : priceMeta.has(part.id) ? money(part.price) : (originalPrices.get(part.id) || 0) > 0 ? `~${money(originalPrices.get(part.id))}` : 'Free / included';
     return `${categoryInfo[cat].label}: ${part?.name || 'Not chosen'} (${price})`;
   });
   const missing = missingPriceCount(selected);
   const unselected = categories.filter((cat) => !getPart(selected, cat)).length;
   const totalLabel = unselected
     ? `Build incomplete: ${unselected} parts not selected`
-    : missing ? `Partial KaBuM total: ${money(totalPrice(selected))} (${missing} prices missing)` : `KaBuM total: ${money(totalPrice(selected))}`;
-  const content = `BuildBuddy parts list\n\n${rows.join('\n')}\n\n${totalLabel}\nEstimated peak draw: about ${estimateWatts(selected)} W\n\nKaBuM prices are imported checks, not live offers. Frame rates are planning estimates, not benchmark results.`;
+    : missing ? `Partial total: ${money(totalPrice(selected))} (${missing} prices missing)` : `Estimated total: ~${money(totalPrice(selected))}`;
+  const content = `BuildBuddy parts list\n\n${rows.join('\n')}\n\n${totalLabel}\nEstimated peak draw: about ${estimateWatts(selected)} W\n\nCatalog prices marked with ~ are planning estimates, not live offers. Imported KaBuM! prices are checked retailer listings. Frame rates are planning estimates, not benchmark results.`;
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(content).then(() => showToast('Parts list copied.')).catch(() => fallbackCopy(content));
   else fallbackCopy(content);
 }

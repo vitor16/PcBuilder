@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>BuildBuddy: plan your PC build</title>
-  <meta name="description" content="Choose PC parts one step at a time. Prices in reais, compatibility checks, a 3D preview and estimated frame rates for popular games.">
+  <meta name="description" content="Choose PC parts one step at a time. Planning prices in reais, compatibility checks, a 3D preview and estimated frame rates for popular games.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
@@ -43,7 +43,7 @@
   <main>
     <section class="intro wrap" id="start">
       <div class="intro-copy">
-        <p class="eyebrow">KaBuM! checked prices · reais (R$)</p>
+        <p class="eyebrow">Brazilian parts catalog · planning prices in reais (R$)</p>
         <h1>Build a PC you can afford, and know what it will run.</h1>
         <p class="lead">Choose one part at a time. We check that the pieces fit, keep the total in reais, and estimate the frame rates you can expect in popular games.</p>
         <a class="btn btn-primary" href="#builder">Start building</a>
@@ -209,10 +209,10 @@
 
         <section class="card">
           <div class="card-head">
-            <h2>KaBuM! prices</h2>
+            <h2>Prices in Brazil</h2>
           </div>
           <p id="priceStatus" class="muted small"></p>
-          <p class="muted small">Prices are not fetched live. Import a checked KaBuM! price file; items without one stay unpriced.</p>
+          <p class="muted small">Prices marked ~ are estimates for planning, not live offers. A checked KaBuM! price file replaces estimates for listed items.</p>
           <div class="price-actions">
             <button id="priceImportBtn" class="btn btn-ghost btn-small" type="button">Import KaBuM! prices</button>
             <button id="priceTemplateBtn" class="btn btn-ghost btn-small" type="button">Download template</button>
@@ -265,7 +265,7 @@
 
   <footer class="site-footer">
     <div class="wrap footer-inner">
-      <p>Prices are shown only from imported KaBuM! checks, not live offers. Verify the current price and specifications on KaBuM! before buying.</p>
+      <p>Catalog prices marked ~ are estimates, not live offers. Import a checked KaBuM! price file for retailer-verified listings, and verify current prices and specifications before buying.</p>
       <p>The 3D preview uses Three.js and needs WebGL in your browser.</p>
     </div>
   </footer>
