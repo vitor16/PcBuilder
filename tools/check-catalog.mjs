@@ -75,8 +75,18 @@ if (!b660Board || b660Board.socket !== 'LGA1700' || b660Board.ram !== 'DDR4' || 
   fail('MSI PRO B660M-A DDR4 is missing or has incorrect socket, memory or form-factor compatibility');
 } else {
   for (const cpuId of ['i712700k', 'i712700', 'i512600k', 'i512400f']) {
+    const cpu = catalog.cpu.find((part) => part.id === cpuId);
+    if (!cpu) {
+      fail(`${cpuId} is missing from the CPU catalog`);
+      continue;
+    }
     const report = evaluate({ cpu: cpuId, motherboard: b660Board.id, ram: 'research-corsair-vengeance-lpx-cmk16gx4m2b3200c16' });
-    if (report.errors.length) fail(`${cpuId} does not pass compatibility checks with the MSI B660M DDR4 board`);
+    const compatibilityChecks = report.checks.filter((check) =>
+      ['Processor fits the board', 'Memory type matches', 'Memory fits the slots'].includes(check.label)
+    );
+    if (compatibilityChecks.length !== 3 || compatibilityChecks.some((check) => !check.ok)) {
+      fail(`${cpuId} or the selected DDR4 kit does not pass compatibility checks with the MSI B660M board`);
+    }
   }
   pass('MSI B660M DDR4 board matches four available 12th Gen Intel CPU choices and DDR4 memory');
 }
