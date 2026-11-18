@@ -76,8 +76,9 @@ export function buildBoard(kit, anchors, parts) {
   const y16 = yT - 1.45;
   const slotYs = board.form === 'ATX' ? [[y16, 0.9], [y16 - 0.4, 0.25], [y16 - 0.62, 0.9], [y16 - 1.0, 0.25], [y16 - 1.22, 0.9]] : [[y16, 0.9], [y16 - 0.5, 0.25], [y16 - 0.72, 0.9]];
   slotYs.forEach(([sy, len]) => {
-    box(bg, len, 0.09, 0.1, mats.plasticLight, xL + 0.3 + len / 2, sy, 0.06, { r: 0.012 });
-    box(bg, len - 0.1, 0.02, 0.105, mats.gold, xL + 0.3 + len / 2, sy, 0.065, { cast: false });
+    // slots start just behind the rear I/O edge so a graphics card's bracket can sit flush with the case
+    box(bg, len, 0.09, 0.1, mats.plasticLight, xL + 0.06 + len / 2, sy, 0.06, { r: 0.012 });
+    box(bg, len - 0.1, 0.02, 0.105, mats.gold, xL + 0.06 + len / 2, sy, 0.065, { cast: false });
   });
 
   /* ---- M.2 slots (first slot carries the selected SSD) ---- */
@@ -245,7 +246,7 @@ export function buildBoard(kit, anchors, parts) {
   return {
     group: root, BH, BW, parts: { bg, cpuG, ramG, coolG, ssd },
     cpuWorld: world(cx, cy, 0.1),
-    slot16: world(xL + 0.3 + 0.45, y16, 0.065),
+    slot16: world(xL + 0.06 + 0.45, y16, 0.065),
     yTopWorld: anchors.boardTop,
     cx, cy, xR, xL, yT,
     plugCpu: world(xL + 0.75, yT - 0.07, 0.17),
@@ -262,9 +263,10 @@ export function buildStorage(kit, storage, anchors) {
   const group = new THREE.Group();
   const is3p5 = formFactor === '3.5-inch';
   const isHdd = storage.interface.includes('HDD');
-  const width = is3p5 ? 0.88 : 0.66;
-  const height = is3p5 ? 0.58 : 0.4;
-  const thickness = isHdd ? 0.13 : 0.055;
+  // Real drive dimensions (1 unit = 10 cm): 3.5-inch 146 × 101.6 × 26.1 mm; 2.5-inch 100 × 70 × 7–9.5 mm.
+  const width = is3p5 ? 1.46 : 1.0;
+  const height = is3p5 ? 1.02 : 0.7;
+  const thickness = is3p5 ? 0.26 : isHdd ? 0.095 : 0.07;
   const shell = isHdd ? mats.aluminium : mats.plastic;
 
   box(group, width, height, thickness, shell, 0, 0, 0, { r: 0.025 });

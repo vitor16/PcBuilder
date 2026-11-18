@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>BuildBuddy: plan your PC build</title>
-  <meta name="description" content="Choose PC parts one step at a time. Planning prices in reais, compatibility checks, a 3D preview and estimated frame rates for popular games.">
+  <meta name="description" content="Build, upgrade and play with BuildBuddy: choose PC parts, check compatibility and preview your PC in 3D.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
@@ -25,8 +25,7 @@
   <header class="site-header">
     <div class="wrap header-inner">
       <a class="brand" href="#start">
-        <span class="brand-mark" aria-hidden="true">BB</span>
-        <span>BuildBuddy</span>
+        <img class="brand-logo" src="assets/buildbuddy-logo.png" alt="BuildBuddy — Build, Upgrade, Play" width="1152" height="648">
       </a>
       <nav class="site-nav" aria-label="Page sections">
         <a href="#start">Start</a>
@@ -60,7 +59,7 @@
         <section class="card stage-card" aria-label="Interactive 3D PC preview">
           <div class="card-head">
             <h2>3D build preview</h2>
-            <p class="muted small">Drag to rotate, scroll to zoom, or choose a camera angle.</p>
+            <p class="muted small">Drag to rotate, right-drag to pan, scroll to zoom, or choose a camera angle.</p>
           </div>
           <div class="stage" id="stage">
             <canvas id="pcCanvas" aria-label="3D preview of your PC"></canvas>
@@ -79,6 +78,7 @@
           </div>
           <div class="stage-controls">
             <label class="check-label"><input id="glassToggle" type="checkbox" checked> Glass panels</label>
+            <label class="check-label"><input id="caseToggle" type="checkbox" checked> Show case</label>
             <label class="check-label"><input id="lightToggle" type="checkbox" checked> Lighting</label>
             <label class="range-label">
               <span>Fan speed <output id="fanOut">Normal</output></span>
@@ -201,10 +201,15 @@
             <button type="button" data-res="1440" aria-pressed="false">1440p</button>
             <button type="button" data-res="2160" aria-pressed="false">4K</button>
           </div>
+          <div id="graphicsModes" class="segmented" role="group" aria-label="Graphics mode">
+            <button type="button" data-graphics-mode="raster" aria-pressed="true" class="is-active">Raster estimates</button>
+            <button type="button" data-graphics-mode="ray-tracing" aria-pressed="false">Measured RT</button>
+          </div>
           <p id="gamesSummary" class="games-summary"></p>
+          <p id="gamesBenchmarkNote" class="fine-print" hidden></p>
           <ul id="games" class="game-list"></ul>
           <p class="legend">Bars run up to 144 fps. The dark line marks 60 fps, the usual target for smooth play.</p>
-          <p class="fine-print">These are planning estimates at typical settings, so use them to compare parts. Real results depend on drivers, game settings and the game version.</p>
+          <p class="fine-print">Raster FPS is a model estimate unless a matching published result is labeled as measured. Measured RT appears only for exact published CPU/GPU/resolution combinations; no RT estimate is invented for other builds. Upscaling and frame generation are not modeled. Drivers, settings and game updates can change results.</p>
         </section>
 
         <section class="card">

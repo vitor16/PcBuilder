@@ -2,82 +2,172 @@ import * as THREE from 'three';
 import { labelTexture } from './textures.js';
 
 /**
- * Graphics card. The PCB lies flat, perpendicular to the motherboard.
- * Local axes: x = length (rear to front), y = thickness (fans point down), z = depth from the board.
- * What you see through the glass is the long top edge with the logo strip and power plug.
+ * Graphics card, modelled at real-world proportions (1 unit = 10 cm).
+ * Local axes: x = length (rear bracket at x = 0, front at x = len), y = height (backplate faces up),
+ * z = depth across the board (the glass side is +z, where the edge connector and logo face the viewer).
+ *
+ * Visible from the default angled view: the backplate (top), the power connector and logo panel (glass side).
+ * Hidden under the shroud: the fans, heatsink fins and PCB, all modelled so the card reads correctly from any angle.
  */
 export function buildGpu(kit, gpu, board) {
   if (!gpu || gpu.id === 'none') return null;
-  const { mats, box, cyl, tag, createFan, screw } = kit;
+  const { mats, box, cyl, tag, createFan } = kit;
 
-  const len = gpu.length / 100;
+  const len = gpu.length / 100;                       // card length
   const triple = gpu.kind === 'triple';
-  const T = triple ? 0.56 : 0.41;
-  const D = triple ? 1.32 : 1.14;
-  const nFans = triple ? 3 : 2;
-  const accentColor = `#${Number(gpu.color || 0x35e0ff).toString(16).padStart(6, '0').slice(-6)}`;
-  const accent = new THREE.MeshStandardMaterial({ color: gpu.color || 0x35e0ff, metalness: 0.3, roughness: 0.4, emissive: gpu.color || 0x35e0ff, emissiveIntensity: 0.15 });
+  const fanCount = triple ? 3 : 2;
+  const T = triple ? 0.6 : 0.46;                      // shroud height (3-slot vs 2-slot cards)
+  const D = triple ? 1.34 : 1.16;                     // depth across the board
+  const fanDia = triple ? 0.96 : 0.9;
+  const shroudTop = -0.035;                           // underside of the backplate/PCB
+  const shroudBottom = -T + 0.035;
+
+  const accentHex = gpu.color || 0x35e0ff;
+  const accentMat = new THREE.MeshStandardMaterial({ color: accentHex, metalness: 0.35, roughness: 0.3, emissive: accentHex, emissiveIntensity: 0.3 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x07090c, roughness: 0.55, metalness: 0.25 });
+  const brushedMat = mats.aluminiumDark;
+  const shroudMat = mats.plasticLight;
+  const shroudDarkMat = new THREE.MeshStandardMaterial({ color: 0x101419, roughness: 0.5, metalness: 0.2 });
+  const goldMat = mats.gold;
 
   const g = new THREE.Group();
 
-  // backplate (faces up in the case)
-  box(g, len, 0.022, D, mats.carbon, len / 2, 0.01, D / 2, { r: 0.008 });
-  box(g, len * 0.66, 0.014, D * 0.52, mats.aluminiumDark, len * 0.52, 0.03, D * 0.52, { r: 0.025, cast: false });
-  box(g, len * 0.48, 0.008, 0.025, accent, len * 0.46, 0.041, D * 0.52, { cast: false });
-  box(g, len * 0.18, 0.008, D * 0.36, mats.aluminium, len * 0.82, 0.041, D * 0.52, { cast: false });
-  for (const x of [0.12, len - 0.12]) {
-    for (const z of [0.14, D - 0.14]) cyl(g, 0.028, 0.028, 0.018, mats.silver, x, 0.043, z, 'y', 12);
+  /* ---------- Backplate (faces up, visible from above) ---------- */
+  // carbon base plate
+  box(g, len, 0.03, D, mats.carbon, len / 2, 0.015, D / 2, { r: 0.01 });
+  // brushed aluminium insert with an inset rim
+  box(g, len * 0.7, 0.016, D * 0.56, brushedMat, len * 0.45, 0.038, D * 0.52, { r: 0.03, cast: false });
+  box(g, len * 0.7 + 0.06, 0.006, D * 0.6 + 0.06, shroudDarkMat, len * 0.45, 0.03, D * 0.52, { cast: false });
+  // six long vent slots through the insert
+  for (let i = 0; i < 6; i++) {
+    const x = 0.55 + i * ((len * 0.7 - 0.9) / 5);
+    box(g, 0.42, 0.01, 0.07, darkMat, x, 0.049, D * 0.3, { cast: false, r: 0.02 });
+    box(g, 0.42, 0.01, 0.07, darkMat, x, 0.049, D * 0.74, { cast: false, r: 0.02 });
   }
-  // PCB between
-  box(g, len - 0.3, 0.016, D - 0.1, mats.pcbGpu, len / 2 - 0.1, -0.03, D / 2);
-  // main shroud
-  box(g, len - 0.05, T - 0.07, D - 0.05, mats.plasticLight, len / 2 + 0.025, -T / 2 - 0.0, D / 2 + 0.0, { r: 0.035 });
-  // outer edge strip you actually see through the glass
-  box(g, len - 0.12, T - 0.1, 0.03, mats.steelLight, len / 2, -T / 2 - 0.01, D, { r: 0.012 });
-  // vent slits on the edge
-  for (let i = 0; i < Math.floor((len - 0.9) / 0.1); i++) {
-    box(g, 0.035, T * 0.55, 0.012, mats.rubber, 0.55 + i * 0.1, -T / 2, D + 0.018, { cast: false });
+  // accent light strips running the length of the card
+  box(g, len * 0.88, 0.012, 0.035, accentMat, len * 0.5, 0.05, D * 0.12, { cast: false });
+  box(g, len * 0.88, 0.012, 0.035, accentMat, len * 0.5, 0.05, D * 0.88, { cast: false });
+  // glowing logo bar at the front of the insert
+  box(g, len * 0.26, 0.012, 0.09, mats.glow, len * 0.8, 0.052, D * 0.5, { cast: false, r: 0.02 });
+  // screw heads around the perimeter of the backplate
+  for (const x of [0.16, len * 0.45, len - 0.22]) {
+    for (const z of [0.1, D - 0.1]) cyl(g, 0.034, 0.034, 0.018, mats.silver, x, 0.04, z, 'y', 14);
   }
-  // glowing logo strip and accent trim
-  box(g, len * 0.38, 0.032, 0.012, mats.glow, len * 0.62, -0.035, D + 0.01, { cast: false });
-  box(g, len - 0.15, 0.012, 0.016, accent, len / 2, -T + 0.03, D + 0.01, { cast: false });
-  box(g, len * 0.2, 0.018, 0.012, accent, len * 0.28, 0.0, D + 0.012, { cast: false });
+  // raised model plaque on the backplate
   const badgeTitle = gpu.name.replace(/^(NVIDIA GeForce|AMD Radeon|Intel Arc)\s*/i, '');
-  const badge = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(len * 0.48, 1.05), 0.15), new THREE.MeshStandardMaterial({
-    map: labelTexture(badgeTitle, `${gpu.vram} GB ${gpu.mem}`, accentColor, 256, 96),
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(len * 0.34, 1.1), 0.22), new THREE.MeshStandardMaterial({
+    map: labelTexture(badgeTitle, `${gpu.vram} GB ${gpu.mem} · ${gpu.vendor || ''}`, `#${Number(accentHex).toString(16).padStart(6, '0')}`, 512, 160),
+    roughness: 0.45,
+    emissive: accentHex,
+    emissiveIntensity: 0.06
+  }));
+  plaque.rotation.x = -Math.PI / 2;
+  plaque.position.set(len * 0.2, 0.052, D * 0.5);
+  g.add(plaque);
+
+  /* ---------- Printed circuit board and components (under the shroud) ---------- */
+  box(g, len - 0.3, 0.016, D - 0.1, mats.pcbGpu, len / 2 - 0.1, -0.03, D / 2);
+  // GPU die with a heat-spreader, surrounded by memory packages
+  box(g, 0.9, 0.02, 0.9, goldMat, len * 0.5, -0.05, D * 0.5, { cast: false });
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2;
+    const rx = 0.82, rz = 0.66;
+    box(g, 0.2, 0.024, 0.14, darkMat, len * 0.5 + Math.cos(ang) * rx, -0.055, D * 0.5 + Math.sin(ang) * rz, { cast: false });
+  }
+  // power-stage capacitors near the rear of the PCB
+  for (let i = 0; i < 4; i++) cyl(g, 0.045, 0.045, 0.1, mats.silver, 0.5 + i * 0.12, -0.11, D * 0.22, 'y', 14);
+
+  /* ---------- Shroud ---------- */
+  // main shell, with a slightly sculpted, narrower front section
+  box(g, len - 0.1, T - 0.07, D - 0.06, shroudMat, len / 2 - 0.02, -T / 2, D / 2, { r: 0.04 });
+  box(g, 0.34, T - 0.12, D - 0.14, shroudDarkMat, len - 0.2, -T / 2, D / 2, { r: 0.03 });
+  // raised panel lines on the shroud underside
+  for (let i = 0; i < 4; i++) box(g, len * 0.6, 0.012, 0.02, mats.steelLight, len * 0.42, shroudBottom - 0.006, D * (0.18 + i * 0.22), { cast: false });
+
+  /* ---------- Glass-side edge (faces the viewer) ---------- */
+  // steel edge frame
+  box(g, len - 0.14, T - 0.1, 0.03, mats.steelLight, len / 2, -T / 2 - 0.01, D, { r: 0.012 });
+  // horizontal louvres along the edge
+  const slitCount = Math.max(6, Math.floor((len - 1.1) / 0.1));
+  for (let i = 0; i < slitCount; i++) {
+    box(g, 0.035, T * 0.5, 0.012, mats.rubber, 0.6 + i * 0.1, -T / 2, D + 0.018, { cast: false });
+  }
+  // accent trim on the top and bottom of the edge
+  box(g, len - 0.2, 0.012, 0.016, accentMat, len / 2, -0.03, D + 0.01, { cast: false });
+  box(g, len - 0.2, 0.012, 0.016, accentMat, len / 2, -T + 0.04, D + 0.01, { cast: false });
+  // glowing logo strip
+  box(g, len * 0.42, 0.034, 0.012, mats.glow, len * 0.6, -T / 2 + 0.02, D + 0.01, { cast: false, r: 0.012 });
+  // model badge on the edge
+  const badge = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(len * 0.36, 0.95), 0.15), new THREE.MeshStandardMaterial({
+    map: labelTexture(badgeTitle, `${gpu.vram} GB ${gpu.mem}`, `#${Number(accentHex).toString(16).padStart(6, '0')}`, 512, 96),
     roughness: 0.5,
-    emissive: gpu.color || 0x35e0ff,
+    emissive: accentHex,
     emissiveIntensity: 0.08
   }));
-  badge.position.set(len * 0.58, -0.11, D + 0.028);
+  badge.position.set(len * 0.24, -T * 0.78, D + 0.028);
   g.add(badge);
-  // fans on the underside
-  const fd = triple ? 0.96 : 0.9;
-  for (let i = 0; i < nFans; i++) {
-    const f = createFan(fd, { rgb: false, blades: 11 });
-    const fx = (len - 0.3) * ((i + 0.5) / nFans) + 0.15;
-    f.position.set(fx, -T + 0.06, D / 2 + 0.02);
+
+  /* ---------- Fans (underside) with recessed rings ---------- */
+  for (let i = 0; i < fanCount; i++) {
+    const fx = (len - 0.4) * ((i + 0.5) / fanCount) + 0.2;
+    // dark recess ring that sits in the shroud
+    cyl(g, fanDia * 0.5 + 0.03, fanDia * 0.5 + 0.03, 0.02, darkMat, fx, shroudBottom + 0.005, D / 2, 'y', 48);
+    const f = createFan(fanDia, { rgb: false, blades: 11 });
+    f.position.set(fx, shroudBottom - 0.04, D / 2);
     f.rotation.x = Math.PI / 2; // face downward
     g.add(f);
   }
-  // heatsink fins visible at the front end
-  for (let i = 0; i < 10; i++) box(g, 0.02, T - 0.13, D - 0.15, mats.aluminium, len - 0.18 + i * 0.012 - 0.12, -T / 2 - 0.01, D / 2, { cast: false });
-  // PCIe edge connector tab
-  box(g, 0.9, 0.03, 0.14, mats.gold, 0.5, -0.03, 0.04, { cast: false });
-  // rear I/O bracket with ports
-  box(g, 0.025, T + 0.16, 1.2, mats.silver, -0.012, -T / 2 + 0.02, 0.6, { cast: false });
-  for (let i = 0; i < 3; i++) box(g, 0.04, 0.07, 0.2, mats.rubber, 0.0, -T * 0.35, 0.28 + i * 0.28, { cast: false });
-  box(g, 0.04, 0.07, 0.2, mats.rubber, 0.0, -T * 0.65, 0.4, { cast: false });
-  // power plug near the front edge
+
+  /* ---------- Heatsink fins (inside the shroud, behind the fans) ---------- */
+  const finCount = 14;
+  for (let i = 0; i < finCount; i++) {
+    box(g, 0.02, T - 0.16, D - 0.2, mats.aluminium, 1.0 + i * 0.07, -T / 2 - 0.01, D / 2, { cast: false });
+  }
+
+  /* ---------- Edge connector tab (PCIe gold fingers) ---------- */
+  box(g, 0.9, 0.03, 0.14, goldMat, 0.5, -0.03, 0.04, { cast: false });
+  for (let i = 0; i < 14; i++) box(g, 0.045, 0.02, 0.1, goldMat, 0.2 + i * 0.05, -0.03, 0.04, { cast: false });
+
+  /* ---------- Rear I/O bracket with real port openings ---------- */
+  box(g, 0.025, T + 0.16, 1.22, mats.silver, -0.012, -T / 2 + 0.02, 0.61, { cast: false });
+  // three DisplayPort and one HDMI opening
+  const ports = [
+    { w: 0.2, h: 0.1, z: 0.22 }, { w: 0.2, h: 0.1, z: 0.46 }, { w: 0.2, h: 0.1, z: 0.7 }, { w: 0.2, h: 0.07, z: 0.96 }
+  ];
+  for (const p of ports) {
+    box(g, 0.05, p.h, p.w, darkMat, -0.02, -T * 0.42, p.z, { cast: false });
+    box(g, 0.02, p.h * 0.5, p.w * 0.6, mats.plasticLight, -0.035, -T * 0.42, p.z, { cast: false });
+  }
+  // vent holes in the bracket
+  for (let i = 0; i < 4; i++) box(g, 0.03, 0.04, 0.05, darkMat, -0.02, -T * 0.82, 0.3 + i * 0.2, { cast: false });
+
+  /* ---------- Power connector on the glass side ---------- */
   const plugX = len - 0.55;
-  box(g, 0.34, 0.17, 0.12, mats.plasticLight, plugX, -0.1, D - 0.04, { r: 0.012 });
-  box(g, 0.29, 0.025, 0.018, mats.aluminiumDark, plugX, -0.005, D + 0.035, { cast: false });
-  for (let i = 0; i < 6; i++) box(g, 0.035, 0.05, 0.012, mats.gold, plugX - 0.12 + i * 0.048, -0.1, D + 0.025, { cast: false });
+  const plugY = -0.12;
+  const hpwr = /12V|12VHPWR|2x6/i.test(gpu.powerConnector || '') || (!gpu.powerConnector && gpu.watts >= 300);
+  const plugCount = hpwr ? 1 : (gpu.watts >= 150 ? 2 : 1);
+  for (let c = 0; c < plugCount; c++) {
+    const x = plugX - c * 0.42;
+    const w = hpwr ? 0.42 : 0.34;
+    // housing
+    box(g, w, 0.2, 0.14, mats.plasticLight, x, plugY, D + 0.05, { r: 0.012 });
+    // pins: 2 rows of contacts
+    for (let row = 0; row < 2; row++) {
+      for (let i = 0; i < (hpwr ? 6 : 4); i++) {
+        box(g, 0.028, 0.028, 0.012, goldMat, x - w / 2 + 0.05 + i * (w - 0.1) / (hpwr ? 5 : 3), plugY + 0.05 - row * 0.1, D + 0.13, { cast: false });
+      }
+    }
+    // latch
+    box(g, w * 0.7, 0.025, 0.018, mats.aluminiumDark, x, plugY + 0.11, D + 0.05, { cast: false });
+  }
+  // status LED
+  box(g, 0.1, 0.02, 0.02, mats.glowSoft, plugX + 0.3, plugY, D + 0.02, { cast: false });
+
   tag(g, 'gpu');
 
-  // Align the card's edge connector with the center of the board's first x16 slot.
+  // Align the card's edge connector with the centre of the board's first x16 slot.
   g.position.set(board.slot16.x - 0.5, board.slot16.y + 0.03, board.slot16.z - 0.04);
-  g.userData.plug = new THREE.Vector3(plugX, -0.1, D + 0.02).add(g.position);
+  g.userData.plug = new THREE.Vector3(plugX, plugY, D + 0.14).add(g.position);
   g.userData.end = len;
   return g;
 }

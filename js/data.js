@@ -32,7 +32,7 @@ export const categoryInfo = {
   gpu: {
     label: 'Graphics card', short: 'GPU',
     text: 'The graphics card draws game frames and accelerates many creative workloads. Its performance, video memory and software features help determine which resolution and settings are practical.',
-    note: 'Check exact card length, thickness, power connectors and recommended supply. The frame-rate numbers here are rough comparisons, not measured benchmarks.'
+    note: 'Check exact card length, thickness, power connectors and recommended supply. Published averages and selected per-game raster/RT results are linked when available; otherwise FPS is an estimate, not a test of your exact setup.'
   },
   storage: {
     label: 'Storage', short: 'SSD',
@@ -822,5 +822,11 @@ export const games = [
   { name: 'Forza Horizon 5', genre: 'Racing, open world', rate: 17, cap: 200 },
   { name: 'Elden Ring', genre: 'Action RPG', rate: 15, cap: 180 },
   { name: 'Hogwarts Legacy', genre: 'Action RPG', rate: 13, cap: 180 },
-  { name: 'Cyberpunk 2077', genre: 'Open world, demanding', rate: 14, cap: 180 }
+  { name: 'Cyberpunk 2077', genre: 'Open world, demanding', rate: 14, cap: 180 },
+  { name: 'Battlefield 6', genre: 'First-person shooter', rate: 26, cap: 400 },
+  { name: '007 First Light', genre: 'Action adventure', rate: 16, cap: 180 },
+  { name: "Assassin's Creed Shadows", genre: 'Open-world action', rate: 12, cap: 160 },
+  { name: 'DOOM: The Dark Ages', genre: 'First-person shooter', rate: 18, cap: 240 },
+  { name: 'Spider-Man 2', genre: 'Action adventure', rate: 15, cap: 180 },
+  { name: 'Pragmata', genre: 'Action adventure', rate: 17, cap: 200 }
 ];

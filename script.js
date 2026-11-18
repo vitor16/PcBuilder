@@ -1,6 +1,6 @@
 import { categoryInfo, categories, catalog, presets, presetInfo } from './js/data.js';
 import {
-  money, getPart, totalPrice, estimateWatts, evaluate, estimateGames, gamesSummary,
+  money, getPart, totalPrice, estimateWatts, evaluate, estimateGames, estimateRayTracingGames, gamesSummary,
   quickSpecs, specRows, FPS_TARGET
 } from './js/logic.js';
 import { clearPriceFeed, loadPriceFeed, makePriceTemplate, savePriceFeed, validatePriceFeed } from './js/price-feed.js';
@@ -18,6 +18,12 @@ let buildCables = null;
 
 const $ = (id) => document.getElementById(id);
 const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const renderSpecValue = (value) => {
+  if (value && typeof value === 'object' && typeof value.text === 'string' && typeof value.href === 'string') {
+    return `<a href="${escapeHTML(value.href)}" target="_blank" rel="noopener noreferrer">${escapeHTML(value.text)}</a>`;
+  }
+  return escapeHTML(value);
+};
 const colorHex = (number) => `#${Number(number || 0x35e0ff).toString(16).padStart(6, '0').slice(-6)}`;
 const STARTING_BUDGET = 4500;
 const THEME_STORAGE_KEY = 'buildbuddy.theme.v1';
@@ -28,7 +34,7 @@ let importedFeed = loadPriceFeed(knownIds);
 let priceMeta = new Map();
 
 function applyFeed(feed) {
-  for (const part of allParts) part.price = originalPrices.get(part.id) || 0;
+  for (const part of allParts) part.price = originalPrices.get(part.id);
   priceMeta = new Map();
   if (feed) {
     for (const item of feed.prices) {
@@ -47,6 +53,7 @@ let selected = { ...presets.esports };
 let activePreset = 'esports';
 let activeCategory = 'cpu';
 let resolution = '1080';
+let graphicsMode = 'raster';
 const openDetails = new Set();
 let toastTimer;
 let scene, camera, renderer, controls, kit, pcRoot, modelParts = {}, raycaster, pointer, clock, resizeObserver, environmentTarget;
@@ -54,6 +61,7 @@ let fanMultiplier = 1;
 let exploded = 0;
 let lightingOn = true;
 let showGlass = true;
+let showCase = true;
 let currentView = 'home';
 
 function getInitialTheme() {
@@ -140,11 +148,16 @@ function renderTabs() {
 function partCard(part, cat) {
   const isChosen = selected[cat] === part.id;
   const source = priceMeta.get(part.id);
-  const referencePrice = originalPrices.get(part.id) || 0;
+  const referencePrice = originalPrices.get(part.id);
+  const hasReferencePrice = Number.isFinite(referencePrice);
   const quick = quickSpecs(cat, part).map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join('');
-  const full = specRows(cat, part).map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join('');
-  const priceText = source ? money(part.price) : referencePrice > 0 ? `~${money(referencePrice)}` : 'No extra cost';
-  const priceSource = source ? `Checked on KaBuM ${escapeHTML(importedFeed.checkedAt)}` : referencePrice > 0 ? 'Catalog estimate · verify current offer' : 'Free, included or visual-only';
+  const full = specRows(cat, part).map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${renderSpecValue(value)}</dd></div>`).join('');
+  const priceText = source ? money(part.price) : hasReferencePrice
+    ? referencePrice > 0 ? `~${money(referencePrice)}` : 'No extra cost'
+    : 'Price unavailable';
+  const priceSource = source ? `Checked on KaBuM ${escapeHTML(importedFeed.checkedAt)}` : hasReferencePrice
+    ? referencePrice > 0 ? 'Catalog estimate · verify current offer' : 'Free, included or visual-only'
+    : 'No catalog price';
   const stock = source ? `<span class="stock stock-${escapeHTML(source.availability)}">${stockLabel(source.availability)}</span>` : '';
   const offerUrl = source?.url || `https://www.kabum.com.br/busca/${encodeURIComponent(part.name)}`;
   const offer = `<a class="offer-link" href="${escapeHTML(offerUrl)}" target="_blank" rel="noopener noreferrer">${source ? 'View KaBuM offer' : 'Search on KaBuM'}</a>`;
@@ -165,6 +178,7 @@ function partCard(part, cat) {
       <p><strong>Good for:</strong> ${escapeHTML(part.fit)}</p>
       ${part.watch ? `<p class="part-watch"><strong>Keep in mind:</strong> ${escapeHTML(part.watch)}</p>` : ''}
       <dl class="full-specs">${full}</dl>
+      ${part.sourceUrl ? `<a class="offer-link" href="${escapeHTML(part.sourceUrl)}" target="_blank" rel="noopener noreferrer">Official product information</a>` : ''}
       ${offer}
     </details>
     <div class="part-foot">
@@ -210,8 +224,12 @@ function renderParts() {
   if ($('fitOnly').checked) items = items.filter((part) => compatibleCandidate(activeCategory, part));
   if (query) items = items.filter((part) => `${part.name} ${part.short} ${part.tag || ''} ${part.desc} ${part.vendor || ''} ${part.generation || ''}`.toLowerCase().includes(query));
   const sort = $('sortBy').value;
-  if (sort === 'low') items.sort((a, b) => a.price - b.price);
-  if (sort === 'high') items.sort((a, b) => b.price - a.price);
+  if (sort === 'low') items.sort((a, b) =>
+    (Number.isFinite(a.price) ? a.price : Infinity) - (Number.isFinite(b.price) ? b.price : Infinity)
+  );
+  if (sort === 'high') items.sort((a, b) =>
+    (Number.isFinite(b.price) ? b.price : -Infinity) - (Number.isFinite(a.price) ? a.price : -Infinity)
+  );
 
   $('parts').innerHTML = items.length
     ? items.map((part) => partCard(part, activeCategory)).join('')
@@ -244,9 +262,11 @@ function renderSummary() {
     : diff === 0 ? 'About exactly on budget.' : `About ${money(diff)} left to spend.`;
   $('list').innerHTML = categories.map((cat) => {
     const part = getPart(selected, cat);
-    const price = part
-      ? priceMeta.has(part.id) ? money(part.price) : (originalPrices.get(part.id) || 0) > 0 ? `~${money(originalPrices.get(part.id))}` : 'Free / included'
-      : '';
+    const referencePrice = part ? originalPrices.get(part.id) : undefined;
+    const price = !part ? ''
+      : priceMeta.has(part.id) ? money(part.price)
+        : Number.isFinite(referencePrice) ? referencePrice > 0 ? `~${money(referencePrice)}` : 'Free / included'
+          : 'No price';
     return `<li><span class="sum-cat">${escapeHTML(categoryInfo[cat].label)}</span><span class="sum-name">${escapeHTML(part?.name || 'Not chosen yet')}</span><span class="sum-price">${escapeHTML(price)}</span></li>`;
   }).join('');
 }
@@ -297,6 +317,12 @@ function gameRow(game) {
   }
   const width = Math.min(100, (game.fps / 144) * 100).toFixed(1);
   const target = ((FPS_TARGET / 144) * 100).toFixed(1);
+  const measuredLabel = game.directBenchmark
+    ? `${game.directBenchmark.resolution} · ${game.directBenchmark.settings.replace(/^In-game benchmark · /, '')}`
+    : '';
+  const sourceLink = game.directBenchmark
+    ? `<a href="${escapeHTML(game.directBenchmark.chartUrl || game.directBenchmark.source.url)}" target="_blank" rel="noopener noreferrer">Source</a>`
+    : '';
   return `<li class="game-row">
     <div class="game-info"><strong>${escapeHTML(game.name)}</strong><span>${escapeHTML(game.genre)}</span></div>
     <div class="game-bar" aria-hidden="true">
@@ -304,18 +330,39 @@ function gameRow(game) {
       <span class="game-target" style="left: ${target}%"></span>
     </div>
     <div class="game-value">
-      <strong>about ${game.fps} fps</strong>
-      <span class="verdict tone-${game.verdict.tone}">${game.verdict.label}</span>
+      <strong>${game.directBenchmark ? `${game.fps} fps average` : `about ${game.fps} fps`}</strong>
+      <span class="verdict tone-${game.verdict.tone}">${game.directBenchmark
+        ? `${escapeHTML(game.verdict.label)} · ${escapeHTML(measuredLabel)} · 1% low ${game.directBenchmark.onePercentLowFps} fps`
+        : game.verdict.label}</span>
+      ${sourceLink}
     </div>
   </li>`;
 }
 
 function renderGames() {
-  const results = estimateGames(selected, resolution);
+  const results = graphicsMode === 'ray-tracing'
+    ? estimateRayTracingGames(selected, resolution)
+    : estimateGames(selected, resolution);
   $('gamesSummary').textContent = gamesSummary(results, resolution);
+  const benchmarkNote = $('gamesBenchmarkNote');
+  const benchmark = results[0]?.cpuBenchmark;
+  const rayTracingBenchmark = results.find((game) => game.directBenchmark)?.directBenchmark;
+  benchmarkNote.hidden = graphicsMode !== 'ray-tracing' && !benchmark;
+  benchmarkNote.innerHTML = graphicsMode === 'ray-tracing'
+    ? `Only directly published results for the selected CPU, GPU and resolution are shown; settings vary by game. No matching result means no RT FPS is available. Upscaling and frame generation are not included.${rayTracingBenchmark
+      ? ` Test system: ${escapeHTML(rayTracingBenchmark.source.testSystem)}; tested card: ${escapeHTML(rayTracingBenchmark.gpuBoard)}. <a href="${escapeHTML(rayTracingBenchmark.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(rayTracingBenchmark.source.title)}</a>.`
+      : ''}`
+    : benchmark
+      ? `Reference ${escapeHTML(benchmark.source.test)} for ${escapeHTML(benchmark.cpuName)} + ${escapeHTML(benchmark.gpuName)}: ${benchmark.averageFps} fps average and ${benchmark.onePercentLowFps} fps 1% low. This aggregate is used to adjust the 1080p estimate; it is not a result for each listed game. <a href="${escapeHTML(benchmark.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(benchmark.source.title)}</a>.`
+      : '';
   $('games').innerHTML = results.map(gameRow).join('');
   document.querySelectorAll('[data-res]').forEach((button) => {
     const on = button.dataset.res === resolution;
+    button.classList.toggle('is-active', on);
+    button.setAttribute('aria-pressed', String(on));
+  });
+  document.querySelectorAll('[data-graphics-mode]').forEach((button) => {
+    const on = button.dataset.graphicsMode === graphicsMode;
     button.classList.toggle('is-active', on);
     button.setAttribute('aria-pressed', String(on));
   });
@@ -387,7 +434,11 @@ function setScratchBuild() {
 function copyBuild() {
   const rows = categories.map((cat) => {
     const part = getPart(selected, cat);
-    const price = !part ? '-' : priceMeta.has(part.id) ? money(part.price) : (originalPrices.get(part.id) || 0) > 0 ? `~${money(originalPrices.get(part.id))}` : 'Free / included';
+    const referencePrice = part ? originalPrices.get(part.id) : undefined;
+    const price = !part ? '-'
+      : priceMeta.has(part.id) ? money(part.price)
+        : Number.isFinite(referencePrice) ? referencePrice > 0 ? `~${money(referencePrice)}` : 'Free / included'
+          : 'No price';
     return `${categoryInfo[cat].label}: ${part?.name || 'Not chosen'} (${price})`;
   });
   const missing = missingPriceCount(selected);
@@ -395,7 +446,7 @@ function copyBuild() {
   const totalLabel = unselected
     ? `Build incomplete: ${unselected} parts not selected`
     : missing ? `Partial total: ${money(totalPrice(selected))} (${missing} prices missing)` : `Estimated total: ~${money(totalPrice(selected))}`;
-  const content = `BuildBuddy parts list\n\n${rows.join('\n')}\n\n${totalLabel}\nEstimated peak draw: about ${estimateWatts(selected)} W\n\nCatalog prices marked with ~ are planning estimates, not live offers. Imported KaBuM! prices are checked retailer listings. Frame rates are planning estimates, not benchmark results.`;
+  const content = `BuildBuddy parts list\n\n${rows.join('\n')}\n\n${totalLabel}\nEstimated peak draw: about ${estimateWatts(selected)} W\n\nCatalog prices marked with ~ are planning estimates, not live offers. Imported KaBuM! prices are checked retailer listings. The game planner labels published results for exact tested setups; all other frame rates are model estimates.`;
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(content).then(() => showToast('Parts list copied.')).catch(() => fallbackCopy(content));
   else fallbackCopy(content);
 }
@@ -469,7 +520,7 @@ async function init3D() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.35;
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const environmentScene = new RoomEnvironment();
     environmentTarget = pmremGenerator.fromScene(environmentScene, 0.04);
@@ -480,17 +531,21 @@ async function init3D() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.target.set(0, 2.4, 0);
-    controls.minDistance = 4.5;
-    controls.maxDistance = 14;
-    controls.maxPolarAngle = Math.PI * 0.49;
-    scene.add(new THREE.HemisphereLight(0xd8efff, 0x465668, 2.3));
-    scene.add(new THREE.AmbientLight(0xb7d2e8, 0.65));
+    controls.minDistance = 3.2;
+    controls.maxDistance = 20;
+    controls.minPolarAngle = Math.PI * 0.04;
+    controls.maxPolarAngle = Math.PI * 0.92;
+    controls.enablePan = true;
+    scene.add(new THREE.HemisphereLight(0xe4f2ff, 0x566474, 2.6));
+    scene.add(new THREE.AmbientLight(0xd0e2f0, 0.85));
     const key = new THREE.DirectionalLight(0xe4f2ff, 3.2);
     key.position.set(4, 7, 5); key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
     key.shadow.bias = -0.0002; key.shadow.normalBias = 0.035; key.shadow.radius = 3;
     scene.add(key);
     const rim = new THREE.DirectionalLight(0xb4dcf5, 1.8);
     rim.position.set(-4, 5, -3); scene.add(rim);
+    const frontFill = new THREE.DirectionalLight(0xffefdc, 2.0);
+    frontFill.position.set(1, 3, 8); scene.add(frontFill);
     const fill = new THREE.PointLight(0x8ddcff, 8, 12); fill.position.set(-3, 2.8, 3); scene.add(fill);
     const floor = new THREE.Mesh(new THREE.CircleGeometry(4.5, 64), new THREE.MeshStandardMaterial({ color: 0x101b26, roughness: 0.7, metalness: 0.15 }));
     floor.rotation.x = -Math.PI / 2; floor.position.y = -0.04; floor.receiveShadow = true; scene.add(floor);
@@ -504,7 +559,7 @@ async function init3D() {
     } else {
       window.addEventListener('resize', resize3D);
     }
-    setStageTip('Drag to turn · scroll to zoom · click a part to open its step');
+    setStageTip('Drag to turn · right-drag to pan · scroll to zoom · click a part to open its step');
     resize3D();
     rebuild3D();
     animate3D();
@@ -589,16 +644,16 @@ function rebuild3D() {
     });
     const light = new THREE.PointLight(previewLighting.color || 0x35e0ff, 3.2, 6.5);
     light.position.set(1.2, 2.5, 1.1); pcRoot.add(light); kit.addLight(light, 3.2);
-    const interiorFill = new THREE.PointLight(0xffedcf, 13, 8, 1.7);
+    const interiorFill = new THREE.PointLight(0xffedcf, 17, 8, 1.7);
     interiorFill.position.set(-0.2, 2.7, 1.25); pcRoot.add(interiorFill);
-    const lowerFill = new THREE.PointLight(0xc0e5ff, 6, 7, 1.8);
+    const lowerFill = new THREE.PointLight(0xc0e5ff, 9, 7, 1.8);
     lowerFill.position.set(-1.25, 1.35, 0.55); pcRoot.add(lowerFill);
-    const boardFill = new THREE.PointLight(0xffffff, 8, 5, 1.6);
+    const boardFill = new THREE.PointLight(0xffffff, 10, 5, 1.6);
     boardFill.position.set(-0.2, 3.1, 2.1); pcRoot.add(boardFill);
     kit.setLighting(previewLighting.mode, colorHex(previewLighting.color), lightingOn);
     update3DControls();
     setStageTip(hasBoardComponents
-      ? 'Drag to turn · scroll to zoom · click a part to open its step'
+      ? 'Drag to turn · right-drag to pan · scroll to zoom · click a part to open its step'
       : 'Choose a CPU, cooler, motherboard, RAM and storage to preview the interior.');
     const gpuFans = !parts.gpu || parts.gpu.id === 'none' ? 0 : parts.gpu.kind === 'triple' ? 3 : 2;
     $('fanHud').textContent = `${anchors.fanCount + gpuFans} fans, animated`;
@@ -613,6 +668,7 @@ function update3DControls() {
   if (!kit) return;
   const lighting = getPart(selected, 'lighting') || getPart({ lighting: 'off' }, 'lighting');
   kit.setLighting(lighting.mode, colorHex(lighting.color), lightingOn);
+  if (modelParts.case) modelParts.case.visible = showCase;
   for (const mesh of (modelParts.glass || [])) { mesh.visible = showGlass; }
   if (modelParts.board) modelParts.board.position.z = (modelParts.board.userData.baseZ ?? modelParts.board.position.z) - exploded * 0.006;
   if (modelParts.gpu) modelParts.gpu.position.z = (modelParts.gpu.userData.baseZ ?? modelParts.gpu.position.z) + exploded * 0.012;
@@ -686,6 +742,12 @@ $('resolutions').addEventListener('click', (event) => {
   resolution = button.dataset.res;
   renderGames();
 });
+$('graphicsModes').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-graphics-mode]');
+  if (!button) return;
+  graphicsMode = button.dataset.graphicsMode;
+  renderGames();
+});
 $('fitOnly').addEventListener('change', renderParts);
 $('sortBy').addEventListener('change', renderParts);
 $('partSearch').addEventListener('input', renderParts);
@@ -705,6 +767,7 @@ $('themeToggle').addEventListener('click', () => {
 $('resetBtn').addEventListener('click', () => { setPreset('starter'); $('budget').value = STARTING_BUDGET; renderSummary(); });
 document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => setCamera(button.dataset.view)));
 $('glassToggle').addEventListener('change', (event) => { showGlass = event.target.checked; update3DControls(); });
+$('caseToggle').addEventListener('change', (event) => { showCase = event.target.checked; update3DControls(); });
 $('lightToggle').addEventListener('change', (event) => { lightingOn = event.target.checked; update3DControls(); });
 $('fanSpeed').addEventListener('input', (event) => {
   const value = Number(event.target.value);

@@ -1,4 +1,5 @@
 import { catalog, categories, games } from './data.js';
+import { GPU_GAME_MEASUREMENTS, GPU_RASTER_HIERARCHY } from './gpu-benchmarks.js';
 
 export const money = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
@@ -13,7 +14,7 @@ export function estimateWatts(selected) {
   const cpu = getPart(selected, 'cpu');
   const gpu = getPart(selected, 'gpu');
   const base = 60; // motherboard, memory, drives and fans
-  return Math.round((cpu?.tdp || 0) * 1.25 + (gpu?.watts || 0) + base);
+  return Math.round((cpu?.maxTurboPower ?? cpu?.tdp ?? 0) * 1.25 + (gpu?.watts || 0) + base);
 }
 
 const formLabel = (form) => (form === 'mATX' ? 'micro-ATX' : form);
@@ -149,9 +150,9 @@ export function evaluate(selected) {
   });
   if (cooler && cpu) rule({
     label: 'Cooler can handle the heat',
-    ok: cooler.capacity >= cpu.tdp * 1.1,
-    good: `Handles the ${cpu.tdp} W this chip gives off`,
-    bad: `${cpu.name} gives off about ${cpu.tdp} W of heat. This cooler is rated for about ${cooler.capacity} W, so it may run hot and loud.`,
+    ok: cooler.capacity >= (cpu.maxTurboPower ?? cpu.tdp) * 1.1,
+    good: `Handles about ${cpu.maxTurboPower ?? cpu.tdp} W at peak`,
+    bad: `${cpu.name} can draw up to about ${cpu.maxTurboPower ?? cpu.tdp} W at peak. This cooler is rated for about ${cooler.capacity} W, so it may run hot and loud.`,
     severity: 'warn',
     fix: 'cooler'
   });
@@ -198,9 +199,11 @@ export function specRows(cat, p) {
         ['Generation', p.generation],
         ['Cores and threads', `${p.cores} cores, ${p.threads} threads`],
         ['Socket', p.socket],
+        ['Base speed', `${p.base} GHz`],
         ['Boost speed', `${p.boost} GHz`],
         ['Cache', `${p.cache} MB`],
-        ['Heat (TDP)', `${p.tdp} W`],
+        ['Processor base power / TDP', `${p.tdp} W`],
+        ...(p.maxTurboPower ? [['Maximum Turbo Power', `${p.maxTurboPower} W`]] : []),
         ['Memory', p.memory],
         ['Built-in graphics', yesNo(p.igpu)],
         ['Cooler in the box', yesNo(p.boxCooler)],
@@ -239,6 +242,7 @@ export function specRows(cat, p) {
       ];
     case 'gpu':
       if (p.id === 'none') return [['Graphics', 'Uses the processor’s built-in graphics'], ['Generation', p.generation]];
+      const hierarchyResult = GPU_RASTER_HIERARCHY.results[p.id];
       return [
         ['Vendor', p.vendor],
         ['Generation', p.generation],
@@ -247,8 +251,26 @@ export function specRows(cat, p) {
         ['Typical power', `about ${p.watts} W`],
         ['Suggested power supply', `${p.minPsu} W or more`],
         ['Cooler style', p.kind === 'triple' ? 'Three fans' : 'Two fans'],
+        ['Slot width', p.slotWidth || (p.kind === 'triple' ? '3-slot' : '2-slot')],
+        ['Fan layout', p.fanLayout || (p.kind === 'triple' ? '3 fans' : '2 fans')],
+        ['Outputs', p.outputs || 'Check the card listing'],
         ...(p.bus ? [['Memory bus', p.bus]] : []),
-        ...(p.powerConnector ? [['Power connector', p.powerConnector]] : [])
+        ...(p.memoryBandwidth ? [['Memory bandwidth', p.memoryBandwidth]] : []),
+        ...(p.pcie ? [['PCI Express interface', p.pcie]] : []),
+        ...(p.streamProcessors ? [['Stream processors', `${p.streamProcessors}`]] : []),
+        ...(p.boostClockMhz ? [['Boost clock', `${p.boostClockMhz} MHz`]] : []),
+        ...(p.powerConnector ? [['Power connector', p.powerConnector]] : []),
+        ...(hierarchyResult ? [
+          ['Measured 1080p raster average', `${hierarchyResult.averageFps.toFixed(1)} fps · 19-game geometric mean`],
+          ['Measured 1080p 1% low', `${hierarchyResult.onePercentLowFps} fps · 19-game geometric mean`],
+          ['Benchmark scope', 'Published test result, not a per-game score or a custom-build result'],
+          ['Benchmark source', {
+            text: `${GPU_RASTER_HIERARCHY.source.title} (updated ${GPU_RASTER_HIERARCHY.source.updated})`,
+            href: GPU_RASTER_HIERARCHY.source.url
+          }]
+        ] : [
+          ['Benchmark coverage', 'Not included in this 19-game 1080p hierarchy; game FPS remains a model estimate']
+        ])
       ];
     case 'storage':
       return [
@@ -257,6 +279,7 @@ export function specRows(cat, p) {
         ['Read speed', `up to ${p.read} MB/s`],
         ['PCIe 4.0', yesNo(p.gen4)],
         ...(p.formFactor ? [['Form factor', p.formFactor]] : []),
+        ...(p.dimensions ? [['Size', p.dimensions]] : []),
         ...(p.write ? [['Write performance', p.write]] : []),
         ...(p.endurance ? [['Endurance note', p.endurance]] : [])
       ];
@@ -264,6 +287,9 @@ export function specRows(cat, p) {
       return [
         ['Output', `${p.watts} W`],
         ['Efficiency', `80 PLUS ${p.efficiency}`],
+        ['Size (W × H × L)', p.dimensions || 'Check the unit'],
+        ['Fan', p.fanMm ? `${p.fanMm} mm` : 'Check the unit'],
+        ['Protections', p.protections || 'Check the unit'],
         ['Cables', p.modular ? 'Detachable' : 'Fixed'],
         ...(p.standard ? [['ATX standard', p.standard]] : []),
         ...(p.gpuCables ? [['Graphics-card cables', p.gpuCables]] : []),
@@ -337,9 +363,8 @@ export function fpsVerdict(fps) {
 }
 
 /**
- * Estimated frame rate for each game, rounded to 5 fps.
- * level × game weight × resolution × a small processor adjustment, capped by what the processor allows.
- * These are planning numbers, not benchmarks.
+ * Game-specific planning estimates use a GPU tier, game weight, resolution factor and CPU cap.
+ * Measured 19-game GPU averages calibrate the tier where available; they are not per-game results.
  */
 export function estimateGames(selected, resolutionId = '1080') {
   const cpu = getPart(selected, 'cpu');
@@ -352,16 +377,93 @@ export function estimateGames(selected, resolutionId = '1080') {
     return games.map((g) => ({ ...g, fps: null, verdict: fpsVerdict(null), integrated: false, note }));
   }
   const integrated = !gpu || gpu.id === 'none';
-  const level = integrated ? (cpu.igpu ? cpu.igpuScore : 0) : gpu.score;
-  const cpuAdj = 1 + (cpu.cpuScore - 1) * 0.55;
+  const hierarchyResult = GPU_RASTER_HIERARCHY.results[gpu.id];
+  const hierarchyReference = GPU_RASTER_HIERARCHY.results[GPU_RASTER_HIERARCHY.referenceGpu];
+  const referenceGpu = getPart({ gpu: GPU_RASTER_HIERARCHY.referenceGpu }, 'gpu');
+  const level = integrated
+    ? (cpu.igpu ? cpu.igpuScore : 0)
+    : hierarchyResult && hierarchyReference && referenceGpu
+      ? referenceGpu.score * hierarchyResult.averageFps / hierarchyReference.averageFps
+      : gpu.score;
+  const defaultCpuAdjustment = 1 + (cpu.cpuScore - 1) * 0.55;
+  const measuredPair = resolutionId === '1080' ? GPU_RASTER_HIERARCHY.cpuScaling.results[gpu.id]?.[cpu.id] : null;
+  const referencePair = GPU_RASTER_HIERARCHY.cpuScaling.results[gpu.id]?.[GPU_RASTER_HIERARCHY.cpuScaling.referenceCpu];
+  const referenceCpu = getPart({ cpu: GPU_RASTER_HIERARCHY.cpuScaling.referenceCpu }, 'cpu');
+  const referenceCpuAdjustment = referenceCpu ? 1 + (referenceCpu.cpuScore - 1) * 0.55 : 1;
+  const cpuAdj = measuredPair && referencePair
+    ? measuredPair.averageFps / referencePair.averageFps * referenceCpuAdjustment
+    : defaultCpuAdjustment;
+  const cpuBenchmark = measuredPair ? {
+    ...measuredPair,
+    source: GPU_RASTER_HIERARCHY.cpuScaling.source,
+    gpuName: gpu.name,
+    cpuName: cpu.name
+  } : null;
 
   return games.map((g) => {
-    if (!level) return { ...g, fps: null, verdict: fpsVerdict(null), integrated };
+    if (!level) return { ...g, fps: null, verdict: fpsVerdict(null), integrated, cpuBenchmark };
     const bound = level * g.rate * res.factor * cpuAdj;
     const capped = Math.min(bound, g.cap * cpu.cpuScore);
-    const fps = Math.max(5, Math.round(capped));
-    return { ...g, fps, integrated, verdict: fpsVerdict(fps) };
+    const gameMeasurement = GPU_RASTER_HIERARCHY.cpuScaling.gameMeasurements[g.name];
+    const directMeasurement = resolutionId === '1080' ? gameMeasurement?.results[gpu.id]?.[cpu.id] : null;
+    const publishedTest = GPU_GAME_MEASUREMENTS.find((measurement) =>
+      measurement.game === g.name && measurement.mode === 'raster'
+    );
+    const publishedMeasurement = publishedTest?.resolutions[resolutionId]?.[gpu.id]?.[cpu.id];
+    const exactMeasurement = directMeasurement || publishedMeasurement;
+    const fps = exactMeasurement?.averageFps ?? Math.max(5, Math.round(capped / 5) * 5);
+    const directBenchmark = exactMeasurement ? {
+      ...exactMeasurement,
+      source: directMeasurement ? GPU_RASTER_HIERARCHY.cpuScaling.source : publishedTest.source,
+      chartUrl: directMeasurement ? null : publishedTest.chartUrl,
+      resolution: directMeasurement ? '1080p' : `${resolutionId}p`,
+      settings: directMeasurement ? gameMeasurement.settings : publishedTest.settings,
+      gpuBoard: directMeasurement ? null : publishedTest.source.gpuBoards[gpu.id]
+    } : null;
+    return { ...g, fps, integrated, verdict: fpsVerdict(fps), cpuBenchmark, directBenchmark };
   });
+}
+
+/** Returns only ray-tracing measurements for the exact published CPU/GPU/resolution setup. */
+export function estimateRayTracingGames(selected, resolutionId = '1080') {
+  const cpu = getPart(selected, 'cpu');
+  const gpu = getPart(selected, 'gpu');
+  if (!cpu || !gpu || gpu.id === 'none') {
+    const note = !cpu || !gpu
+      ? 'Choose a processor and graphics card to look up measured ray-tracing results.'
+      : 'Ray-tracing results require a dedicated graphics card.';
+    return [{ name: 'Measured ray-tracing results', genre: 'Published tests', fps: null, verdict: fpsVerdict(null), note }];
+  }
+
+  const measurements = GPU_GAME_MEASUREMENTS.filter((measurement) => measurement.mode === 'ray-tracing')
+    .map((measurement) => {
+      const result = measurement.resolutions[resolutionId]?.[gpu.id]?.[cpu.id];
+      if (!result) return null;
+      return {
+        name: measurement.game,
+        genre: 'Ray tracing · direct test',
+        fps: result.averageFps,
+        verdict: fpsVerdict(result.averageFps),
+        directBenchmark: {
+          ...result,
+          source: measurement.source,
+          chartUrl: measurement.chartUrl,
+          resolution: `${resolutionId}p`,
+          settings: measurement.settings,
+          gpuBoard: measurement.source.gpuBoards[gpu.id]
+        }
+      };
+    })
+    .filter(Boolean);
+
+  if (measurements.length) return measurements;
+  return [{
+    name: 'No matching ray-tracing test',
+    genre: 'Published measurements only',
+    fps: null,
+    verdict: fpsVerdict(null),
+    note: `No direct ray-tracing result is published for ${cpu.name} + ${gpu.name} at ${resolutionId === '2160' ? '4K' : `${resolutionId}p`}. No RT FPS estimate is shown.`
+  }];
 }
 
 /** One sentence that explains the results in plain words. */
@@ -374,7 +476,9 @@ export function gamesSummary(results, resolutionId = '1080') {
   }
   const smooth = playable.filter((g) => g.fps >= FPS_TARGET).length;
   const hardest = playable.reduce((a, b) => (b.fps < a.fps ? b : a));
-  const hardestNote = `${hardest.name} is the most demanding, at about ${hardest.fps} fps.`;
+  const hardestNote = hardest.directBenchmark
+    ? `${hardest.name} measured ${hardest.fps} fps on average in this exact CPU/GPU test.`
+    : `${hardest.name} is the most demanding, at about ${hardest.fps} fps.`;
 
   if (smooth === playable.length) {
     return `At ${res.label}, all ${playable.length} games reach ${FPS_TARGET} fps or more. ${hardestNote}`;

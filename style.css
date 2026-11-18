@@ -2,28 +2,28 @@
 
 :root {
   color-scheme: light;
-  --paper: #f5f3ee;
+  --paper: #f3f6fb;
   --surface: #ffffff;
-  --surface-muted: #faf9f6;
-  --ink: #1e2b30;
-  --muted: #5b6a6f;
-  --line: #e3dfd5;
-  --line-strong: #cfc9bb;
-  --accent: #1f6f6b;
-  --accent-strong: #185a57;
+  --surface-muted: #f6f9fd;
+  --ink: #17243a;
+  --muted: #586b83;
+  --line: #dce5f0;
+  --line-strong: #bdcadd;
+  --accent: #086fd6;
+  --accent-strong: #0058b8;
   --accent-ink: #ffffff;
-  --accent-soft: #e4f1ef;
+  --accent-soft: #e8f3ff;
   --good: #2e7d4f;
   --good-soft: #e5f3ea;
   --warn: #8f5d00;
   --warn-soft: #fbf1dc;
   --bad: #b3261e;
   --bad-soft: #fbe8e6;
-  --stage: #132028;
+  --stage: #0a1220;
   --toast-bg: var(--ink);
   --toast-ink: #ffffff;
-  --progress-track: #ebe7de;
-  --chosen-surface: #f4faf9;
+  --progress-track: #e3eaf3;
+  --chosen-surface: #f1f7ff;
   --good-border: #b9dcc6;
   --warn-border: #c8920f;
   --bad-border: #efc2be;
@@ -39,28 +39,28 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --paper: #11191c;
-  --surface: #1b2529;
-  --surface-muted: #222e32;
-  --ink: #e7eeed;
-  --muted: #aab8b8;
-  --line: #334247;
-  --line-strong: #4b5c61;
-  --accent: #70c8bd;
-  --accent-strong: #8ad6cb;
-  --accent-ink: #10211f;
-  --accent-soft: #243d3c;
+  --paper: #070b12;
+  --surface: #0e1624;
+  --surface-muted: #121d2e;
+  --ink: #edf4ff;
+  --muted: #a0b2ca;
+  --line: #243246;
+  --line-strong: #364a64;
+  --accent: #198cff;
+  --accent-strong: #60adff;
+  --accent-ink: #03101f;
+  --accent-soft: #102a48;
   --good: #7ed09a;
   --good-soft: #213b2c;
   --warn: #f0c46e;
   --warn-soft: #493b20;
   --bad: #ff8c82;
   --bad-soft: #4a2928;
-  --stage: #0c1418;
-  --toast-bg: #e7eeed;
-  --toast-ink: #152024;
-  --progress-track: #303b3f;
-  --chosen-surface: #1e3433;
+  --stage: #050a12;
+  --toast-bg: #edf4ff;
+  --toast-ink: #101b2c;
+  --progress-track: #23324a;
+  --chosen-surface: #0f2035;
   --good-border: #426c52;
   --warn-border: #8c6b29;
   --bad-border: #75413e;
@@ -117,7 +117,7 @@ svg {
 }
 
 :focus-visible {
-  outline: 3px solid rgba(31, 111, 107, 0.45);
+  outline: 3px solid rgba(8, 111, 214, 0.5);
   outline-offset: 2px;
 }
 
@@ -261,7 +261,7 @@ input[type='search']:focus,
 select:focus {
   border-color: var(--accent);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(31, 111, 107, 0.15);
+  box-shadow: 0 0 0 3px rgba(8, 111, 214, 0.18);
 }
 
 .check-label {
@@ -295,9 +295,9 @@ select:focus {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--paper);
+  background: rgba(5, 9, 16, 0.96);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid #1f2c40;
 }
 
 .header-inner {
@@ -305,34 +305,24 @@ select:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 16px;
-  min-height: 64px;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  min-height: 96px;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: var(--ink);
+  flex: 0 0 auto;
+  color: #ffffff;
   text-decoration: none;
-  font-family: var(--serif);
-  font-weight: 700;
-  font-size: 1.2rem;
 }
 
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-family: var(--sans);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+.brand-logo {
+  display: block;
+  width: 176px;
+  height: auto;
+  border-radius: 8px;
 }
 
 .site-nav {
@@ -342,13 +332,13 @@ select:focus {
 }
 
 .site-nav a {
-  color: var(--muted);
+  color: #b9c9de;
   text-decoration: none;
   font-weight: 600;
 }
 
 .site-nav a:hover {
-  color: var(--ink);
+  color: #ffffff;
 }
 
 .header-actions {
@@ -356,6 +346,17 @@ select:focus {
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+.header-actions .btn-ghost {
+  background: #101a29;
+  color: #f2f7ff;
+  border-color: #35465f;
+}
+
+.header-actions .btn-ghost:hover {
+  background: #19263a;
+  border-color: #5b7394;
 }
 
 /* ---------- Intro ---------- */
@@ -1482,6 +1483,10 @@ select:focus {
 
   .header-inner {
     gap: 10px 12px;
+  }
+
+  .brand-logo {
+    width: 150px;
   }
 
   .site-nav {

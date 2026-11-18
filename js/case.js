@@ -123,7 +123,9 @@ export function buildCase(kit, pcCase, fanPack, psu) {
 
   /* ---- PSU shroud / basement cover ---- */
   const shroud = new THREE.Group();
-  const shW = showcase ? L - 1.35 : L - 1.2;
+  // The PSU chamber is sized from the chosen unit's real length (mm → units) plus room for cables.
+  const psuLen = (psu?.lengthMm ?? 160) / 100;
+  const shW = Math.min(showcase ? L - 1.35 : L - 1.2, Math.max(2.6, psuLen + 0.8));
   const shX = -L / 2 + 0.06 + shW / 2;
   box(shroud, shW, 0.045, W - 0.1, mats.aluminiumDark, shX, base, 0, { r: 0.012 }); // top
   const front = box(shroud, shW, base - 0.04, 0.045, mats.steelLight, shX, base / 2, W / 2 - 0.1, { r: 0.012 }); // glass-facing wall
@@ -196,7 +198,7 @@ export function buildCase(kit, pcCase, fanPack, psu) {
   }
 
   return {
-    group, body, dims: d, feet: FEET, boardTop, boardX0: -L / 2 + 0.4,
+    group, body, dims: d, feet: FEET, boardTop, boardX0: -L / 2 + 0.06,
     trayZ: -W / 2 + T, glassZ: W / 2, shroudTopY: base, fanCount: slots.length, rearFanY: rearFan.y,
     frontX: L / 2 - (showcase ? 1.2 : 0.38), isShowcase: showcase
   };

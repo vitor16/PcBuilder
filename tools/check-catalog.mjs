@@ -2,13 +2,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { GPU_GAME_MEASUREMENTS, GPU_RASTER_HIERARCHY } from '../js/gpu-benchmarks.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const data = await import(pathToFileURL(path.join(root, 'js/data.js')).href);
 const logic = await import(pathToFileURL(path.join(root, 'js/logic.js')).href);
 const priceFeedModule = await import(pathToFileURL(path.join(root, 'js/price-feed.js')).href);
-const { catalog, categories, categoryInfo, presets, presetInfo } = data;
-const { evaluate, estimateGames, gamesSummary, specRows, RESOLUTIONS, totalPrice, money } = logic;
+const { catalog, categories, categoryInfo, games, presets, presetInfo } = data;
+const { evaluate, estimateGames, estimateRayTracingGames, gamesSummary, specRows, RESOLUTIONS, totalPrice, money, estimateWatts } = logic;
 
 let problems = 0;
 const fail = (msg) => { problems++; console.log(`FAIL  ${msg}`); };
@@ -56,8 +57,9 @@ for (const cat of categories) {
   for (const p of catalog[cat]) {
     if (seenIds.has(p.id)) fail(`duplicate id "${p.id}" in ${cat} and ${seenIds.get(p.id)}`);
     seenIds.set(p.id, cat);
-    if (typeof p.price !== 'number' || p.price < 0) fail(`${p.id}: price must be a number of reais`);
+    if (p.price !== null && (typeof p.price !== 'number' || p.price < 0)) fail(`${p.id}: price must be non-negative or null when unavailable`);
     if (!p.name || !p.desc || !p.fit || !p.tag || !p.short) fail(`${p.id}: missing name, tag, short, desc or fit`);
+    if (p.sourceUrl && !/^https:\/\/[^ ]+$/.test(p.sourceUrl)) fail(`${p.id}: invalid product source URL`);
     const rows = specRows(cat, p);
     if (!rows.length) fail(`${p.id}: no spec rows`);
     for (const [label, value] of rows) {
@@ -68,9 +70,104 @@ for (const cat of categories) {
 const dedicatedGpus = catalog.gpu.filter((g) => g.id !== 'none').length;
 pass(`${seenIds.size} options, ${dedicatedGpus} dedicated graphics cards, ${catalog.case.length} cases, no duplicate ids`);
 
+const b660Board = catalog.motherboard.find((board) => board.id === 'msi-pro-b660m-a-ddr4');
+if (!b660Board || b660Board.socket !== 'LGA1700' || b660Board.ram !== 'DDR4' || b660Board.form !== 'mATX') {
+  fail('MSI PRO B660M-A DDR4 is missing or has incorrect socket, memory or form-factor compatibility');
+} else {
+  for (const cpuId of ['i712700k', 'i712700', 'i512600k', 'i512400f']) {
+    const report = evaluate({ cpu: cpuId, motherboard: b660Board.id, ram: 'research-corsair-vengeance-lpx-cmk16gx4m2b3200c16' });
+    if (report.errors.length) fail(`${cpuId} does not pass compatibility checks with the MSI B660M DDR4 board`);
+  }
+  pass('MSI B660M DDR4 board matches four available 12th Gen Intel CPU choices and DDR4 memory');
+}
+const i712700kSpecs = specRows('cpu', catalog.cpu.find((cpu) => cpu.id === 'i712700k'));
+if (!i712700kSpecs.some(([label, value]) => label === 'Maximum Turbo Power' && value === '190 W')) {
+  fail('i7-12700K does not show its published Maximum Turbo Power');
+}
+if (estimateWatts({ cpu: 'i712700k' }) !== 298) fail('peak draw estimate does not account for the i7-12700K Maximum Turbo Power');
+if (evaluate({ cpu: 'i712700k', cooler: 'tower-4pipe' }).checks.find((check) => check.label === 'Cooler can handle the heat')?.ok !== false) {
+  fail('cooler compatibility does not account for the i7-12700K Maximum Turbo Power');
+}
+pass('CPU power and cooler checks account for published maximum turbo power');
+
 for (const cpu of catalog.cpu) if (!cpu.vendor || !cpu.generation) fail(`${cpu.id}: missing CPU vendor or generation metadata`);
 for (const gpu of catalog.gpu) if (!gpu.vendor || !gpu.generation) fail(`${gpu.id}: missing GPU vendor or generation metadata`);
 pass('every CPU and GPU has filterable vendor and generation metadata');
+
+for (const [id, result] of Object.entries(GPU_RASTER_HIERARCHY.results)) {
+  if (!catalog.gpu.some((gpu) => gpu.id === id)) fail(`${id}: benchmark result has no matching GPU`);
+  if (!(result.averageFps > 0) || !(result.onePercentLowFps > 0) || result.onePercentLowFps > result.averageFps) {
+    fail(`${id}: invalid 1080p benchmark values`);
+  }
+}
+const benchmarkGpu = catalog.gpu.find((gpu) => gpu.id === 'rtx5070');
+const benchmarkSpecs = specRows('gpu', benchmarkGpu);
+if (!benchmarkSpecs.some(([label, value]) => label === 'Benchmark source' && value.href === GPU_RASTER_HIERARCHY.source.url)) {
+  fail('measured GPU details do not link to their source');
+}
+for (const [gpuId, cpuResults] of Object.entries(GPU_RASTER_HIERARCHY.cpuScaling.results)) {
+  if (!catalog.gpu.some((gpu) => gpu.id === gpuId)) fail(`${gpuId}: CPU-scaling data has no matching GPU`);
+  for (const [cpuId, result] of Object.entries(cpuResults)) {
+    if (!catalog.cpu.some((cpu) => cpu.id === cpuId)) fail(`${cpuId}: CPU-scaling data has no matching CPU`);
+    if (!(result.averageFps > 0) || !(result.onePercentLowFps > 0) || result.onePercentLowFps > result.averageFps) {
+      fail(`${gpuId}/${cpuId}: invalid CPU-scaling benchmark values`);
+    }
+  }
+}
+const highCpuBuild = { cpu: 'r79800x3d' };
+const rtx5070Estimate = estimateGames({ ...highCpuBuild, gpu: 'rtx5070' }, '1080').find((game) => game.name === 'Cyberpunk 2077');
+const rx9070xtEstimate = estimateGames({ ...highCpuBuild, gpu: 'rx9070xt' }, '1080').find((game) => game.name === 'Cyberpunk 2077');
+const expectedGpuRatio = GPU_RASTER_HIERARCHY.results.rx9070xt.averageFps / GPU_RASTER_HIERARCHY.results.rtx5070.averageFps;
+if (!rtx5070Estimate || !rx9070xtEstimate || Math.abs(rx9070xtEstimate.fps / rtx5070Estimate.fps - expectedGpuRatio) > 0.04) {
+  fail('measured GPU hierarchy is not calibrating the game estimator');
+} else pass('game GPU tiers calibrate to measured 19-game averages where available');
+const cpuScalingExample = estimateGames({ cpu: 'r5500', gpu: 'rtx5070' }, '1080')[0];
+if (cpuScalingExample.cpuBenchmark?.averageFps !== 93 || cpuScalingExample.cpuBenchmark?.onePercentLowFps !== 63) {
+  fail('1080p game estimates do not expose the matching measured CPU/GPU aggregate');
+} else if (estimateGames({ cpu: 'r5500', gpu: 'rtx5070' }, '1440')[0].cpuBenchmark) {
+  fail('1080p CPU/GPU aggregate is incorrectly shown for a different resolution');
+} else pass('CPU/GPU scaling uses exact measured pairings only at the tested resolution');
+const directHogwarts = estimateGames({ cpu: 'r79800x3d', gpu: 'rtx5070' }, '1080').find((game) => game.name === 'Hogwarts Legacy');
+if (directHogwarts?.fps !== 133 || directHogwarts.directBenchmark?.onePercentLowFps !== 76) {
+  fail('direct Hogwarts Legacy benchmark is not used for its exact CPU/GPU/resolution setup');
+} else if (estimateGames({ cpu: 'r79800x3d', gpu: 'rtx5070' }, '1440').find((game) => game.name === 'Hogwarts Legacy').directBenchmark) {
+  fail('1080p direct game result is incorrectly reused at 1440p');
+} else pass('direct game results are used only for the tested CPU/GPU/resolution tuple');
+const directBattlefield = estimateGames({ cpu: 'r5500', gpu: 'rx9060xt8' }, '1080').find((game) => game.name === 'Battlefield 6');
+if (directBattlefield?.fps !== 143 || directBattlefield.directBenchmark?.onePercentLowFps !== 111) {
+  fail('direct Battlefield 6 benchmark is not used for its exact CPU/GPU/resolution setup');
+} else pass('additional researched title includes direct measured CPU/GPU pair results');
+for (const measurement of GPU_GAME_MEASUREMENTS) {
+  if (!games.some((game) => game.name === measurement.game)) fail(`${measurement.game}: published game test is not listed in the planner`);
+  if (!['raster', 'ray-tracing'].includes(measurement.mode)) fail(`${measurement.game}: invalid published graphics mode`);
+  if (!measurement.source?.url || !measurement.chartUrl || !measurement.settings) fail(`${measurement.game}: missing source, chart or settings`);
+  for (const [resolution, gpuResults] of Object.entries(measurement.resolutions)) {
+    if (!['1440', '2160'].includes(resolution)) fail(`${measurement.game}: unexpected measured resolution ${resolution}`);
+    for (const [gpuId, cpuResults] of Object.entries(gpuResults)) {
+      if (!catalog.gpu.some((gpu) => gpu.id === gpuId)) fail(`${measurement.game}: benchmark GPU ${gpuId} is not in the catalog`);
+      for (const [cpuId, result] of Object.entries(cpuResults)) {
+        if (!catalog.cpu.some((cpu) => cpu.id === cpuId)) fail(`${measurement.game}: benchmark CPU ${cpuId} is not in the catalog`);
+        if (!(result.averageFps > 0) || result.onePercentLowFps < 0 || result.onePercentLowFps > result.averageFps) {
+          fail(`${measurement.game}: invalid direct FPS for ${resolution}p ${gpuId}/${cpuId}`);
+        }
+      }
+    }
+  }
+}
+const direct007 = estimateGames({ cpu: 'r79800x3d', gpu: 'rx9070xt' }, '1440').find((game) => game.name === '007 First Light');
+if (direct007?.fps !== 102 || direct007.directBenchmark?.onePercentLowFps !== 84 || direct007.directBenchmark?.resolution !== '1440p') {
+  fail('direct 007 First Light result is not used for its exact 1440p CPU/GPU setup');
+} else pass('direct 1440p/4K raster results are restricted to published CPU/GPU/settings');
+const directRT = estimateRayTracingGames({ cpu: 'r79800x3d', gpu: 'rx9070xt' }, '2160').find((game) => game.name === 'DOOM: The Dark Ages');
+if (directRT?.fps !== 9 || directRT.directBenchmark?.onePercentLowFps !== 5) {
+  fail('direct 4K path-tracing result is not used for its exact CPU/GPU setup');
+} else if (estimateRayTracingGames({ cpu: 'r5500', gpu: 'rx9070xt' }, '1440').some((game) => game.fps !== null)) {
+  fail('ray-tracing result was invented for an untested CPU/GPU pair');
+} else pass('measured ray tracing is shown only for exact tested CPU/GPU/resolution combinations');
+const directSpiderMan = estimateRayTracingGames({ cpu: 'r79800x3d', gpu: 'rtx5060ti' }, '1440').find((game) => game.name === 'Spider-Man 2');
+if (directSpiderMan?.fps !== 42 || directSpiderMan.directBenchmark?.onePercentLowFps !== 24) {
+  fail('direct RTX 5060 Ti ray-tracing results do not map to the catalog GPU');
+} else pass('second published GPU comparison resolves to the correct catalog card');
 
 // Price imports must be explicitly attributable to KaBuM! and link to its domain.
 const validPrice = {

@@ -1,3 +1,5 @@
+import { addResearchCatalogOptions } from './catalog-expansion-research.js';
+
 const SOCKETS = ['AM3+', 'AM4', 'AM5', 'LGA1151', 'LGA1200', 'LGA1700'];
 
 const cpuOptions = [
@@ -124,6 +126,7 @@ const ramOptions = [
 
 const gpuOptions = [
   ['rx6500xt', 'AMD Radeon RX 6500 XT 4 GB', 999, 2.3, 107, 400, 190, 4, 'GDDR6', 'dual'],
+  ['rx9060xt8', 'AMD Radeon RX 9060 XT 8 GB', 2299, 5.2, 150, 500, 280, 8, 'GDDR6', 'dual'],
   ['rtx3060', 'NVIDIA GeForce RTX 3060 12 GB', 1899, 4.2, 170, 550, 242, 12, 'GDDR6', 'dual'],
   ['rtx3060ti', 'NVIDIA GeForce RTX 3060 Ti 8 GB', 2299, 5.0, 200, 600, 242, 8, 'GDDR6', 'dual'],
   ['rtx3070', 'NVIDIA GeForce RTX 3070 8 GB', 2599, 5.8, 220, 650, 290, 8, 'GDDR6', 'triple'],
@@ -149,9 +152,17 @@ const gpuOptions = [
   score, watts, minPsu, length, kind, vram, mem, color: name.includes('Radeon') ? 0xd24a3a : 0x76b900,
   bus: vram >= 16 ? '256-bit (typical for this family)' : '128–192-bit (model-dependent)',
   powerConnector: watts >= 300 ? '2–3 × 8-pin or newer high-power connector; verify board model' : '1–2 × 8-pin; verify board model',
+  ...(id === 'rx9060xt8' ? {
+    bus: '128-bit',
+    memoryBandwidth: '320 GB/s',
+    memoryBus: 128,
+    pcie: 'PCIe 5.0 x16',
+    streamProcessors: 2048,
+    boostClockMhz: 3130
+  } : {}),
   desc: `${name} is a ${kind === 'triple' ? 'larger triple-fan' : 'compact dual-fan'} graphics card with ${vram} GB of ${mem} memory. Its planning power draw is about ${watts} W; actual clock speed, cooler and connector layout vary by card maker.`,
   fit: `${vram >= 12 ? 'Detailed 1440p gaming and GPU-accelerated work' : '1080p gaming and everyday graphics workloads'}; check the exact card dimensions before ordering.`,
-  watch: `${length} mm long and calls for a ${minPsu} W or larger power supply. These are reference estimates, not a benchmark or a specific board-partner card.`
+  watch: `${length} mm long and calls for a ${minPsu} W or larger power supply. These are reference estimates, not a benchmark or a specific board-partner card.${id === 'rx9060xt8' ? ' This 8 GB variant can be limited by video-memory capacity in high-texture settings; benchmark results differ substantially from the 16 GB version.' : ''}`
 }));
 
 const storageOptions = [
@@ -613,6 +624,7 @@ export function addCatalogOptions(catalog) {
       watch: 'Community-maintained rolling release; updates can require troubleshooting.'
     }
   );
+  addResearchCatalogOptions(catalog);
   for (const pcCase of catalog.case) {
     if (!pcCase.frontUsb) pcCase.frontUsb = 'Front USB and audio layout varies; verify the exact case model';
     if (!pcCase.dimensions) pcCase.dimensions = 'Model-dependent; verify the exact case measurements';
@@ -627,6 +639,29 @@ export function addCatalogOptions(catalog) {
   }
   for (const drive of catalog.storage) {
     if (!drive.formFactor) drive.formFactor = drive.interface.includes('NVMe') ? 'M.2 2280' : '2.5-inch';
+    if (!drive.dimensions) {
+      drive.dimensions = drive.formFactor === 'M.2 2280' ? '80 × 22 × 2.3 mm'
+        : drive.formFactor === '3.5-inch' ? '146 × 101.6 × 26.1 mm' : '100 × 69.85 × 7 mm';
+    }
+  }
+  // PSU sizes: ATX units are 150 mm wide and 86 mm tall; the length grows with output and the fan size follows.
+  for (const psu of catalog.psu) {
+    if (!psu.lengthMm) {
+      psu.lengthMm = psu.watts >= 1500 ? 200 : psu.watts >= 1000 ? 180 : psu.watts >= 750 ? 160 : psu.watts >= 550 ? 150 : 140;
+    }
+    psu.dimensions = `150 × 86 × ${psu.lengthMm} mm (W × H × L)`;
+    psu.fanMm = psu.watts >= 850 ? 135 : 120;
+    psu.protections = psu.efficiency === 'Platinum' || psu.watts >= 850
+      ? 'OVP, UVP, OCP, OPP, SCP, OTP and surge protection'
+      : 'OVP, UVP, OCP, SCP and OTP protection';
+    psu.cableSummary = psu.modular ? 'Detachable cables; only use the set supplied with this unit' : 'Fixed cables';
+  }
+  // Graphics cards: slot width, outputs and power plug type, from the card length and fan layout.
+  for (const gpu of catalog.gpu) {
+    if (gpu.id === 'none') continue;
+    gpu.slotWidth = gpu.kind === 'triple' ? '3-slot' : '2-slot';
+    gpu.outputs = 'Typical for this class: 3 × DisplayPort and 1 × HDMI; confirm on the card listing';
+    gpu.fanLayout = gpu.kind === 'triple' ? '3 fans on a larger heatsink' : '2 fans on a compact heatsink';
   }
 }
 
