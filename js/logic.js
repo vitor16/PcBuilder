@@ -17,7 +17,7 @@ export function estimateWatts(selected) {
   return Math.round((cpu?.maxTurboPower ?? cpu?.tdp ?? 0) * 1.25 + (gpu?.watts || 0) + base);
 }
 
-const formLabel = (form) => (form === 'mATX' ? 'micro-ATX' : form);
+const formLabel = (form) => (form === 'mATX' ? 'micro-ATX' : form === 'ITX' ? 'Mini-ITX' : form);
 const yesNo = (v) => (v ? 'Yes' : 'No');
 const COOLER_TYPE = { stock: 'Boxed cooler', tower: 'Tower cooler', dual: 'Dual-tower cooler', aio: 'Liquid cooler' };
 const LIGHT_MODE = { off: 'Off', solid: 'Steady color', rainbow: 'Slow color cycle' };
@@ -216,6 +216,14 @@ export function specRows(cat, p) {
         ['Handles about', `${p.capacity} W of heat`],
         ['Sockets', p.sockets.join(', ')],
         ...(p.fanCount ? [['Fans', `${p.fanCount} × ${p.fanSize} mm`]] : []),
+        ...(p.fanSpeed ? [['Fan speed', p.fanSpeed]] : []),
+        ...(p.noise ? [['Maximum noise class', p.noise]] : []),
+        ...(p.bearing ? [['Fan bearing', p.bearing]] : []),
+        ...(p.heatpipeCount ? [['Heat pipes', `${p.heatpipeCount} direct-contact pipes`]] : []),
+        ...(p.ramClearance ? [['Memory clearance', p.ramClearance]] : []),
+        ...(p.radiatorThickness ? [['Radiator thickness', p.radiatorThickness]] : []),
+        ...(p.tubeLength ? [['Tube routing', p.tubeLength]] : []),
+        ...(p.pumpPower ? [['Pump connection', p.pumpPower]] : []),
         ...(p.lighting ? [['Lighting / finish', p.lighting]] : [])
       ];
     case 'motherboard':

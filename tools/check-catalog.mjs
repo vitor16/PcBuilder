@@ -70,6 +70,20 @@ for (const cat of categories) {
 const dedicatedGpus = catalog.gpu.filter((g) => g.id !== 'none').length;
 pass(`${seenIds.size} options, ${dedicatedGpus} dedicated graphics cards, ${catalog.case.length} cases, no duplicate ids`);
 
+const jonsboCases = catalog.case.filter((pcCase) => /JONSBO/i.test(pcCase.name));
+for (const requiredId of ['jonsbo-c6', 'jonsbo-c6-max', 'jonsbo-q8', 'jonsbo-d31', 'jonsbo-d32', 'jonsbo-d41', 'jonsbo-z20', 'jonsbo-n2', 'jonsbo-tk3']) {
+  if (!catalog.case.some((pcCase) => pcCase.id === requiredId)) fail(`missing JONSBO case "${requiredId}"`);
+}
+const jonsboNames = new Set(jonsboCases.map((pcCase) => pcCase.name));
+if (jonsboNames.size !== jonsboCases.length) fail('JONSBO case names repeat themselves');
+if (jonsboCases.length < 8) fail(`expected at least 8 JONSBO cases, found ${jonsboCases.length}`);
+for (const pcCase of jonsboCases) {
+  if (!(pcCase.maxCooler > 0) || !(pcCase.maxGpu > 0) || !pcCase.dimensions) {
+    fail(`JONSBO case "${pcCase.id}" is missing real fit or dimension details`);
+  }
+}
+pass(`${jonsboCases.length} unique JONSBO cases include C6 and Q8 with GPU/cooler clearance details`);
+
 const b660Board = catalog.motherboard.find((board) => board.id === 'msi-pro-b660m-a-ddr4');
 if (!b660Board || b660Board.socket !== 'LGA1700' || b660Board.ram !== 'DDR4' || b660Board.form !== 'mATX') {
   fail('MSI PRO B660M-A DDR4 is missing or has incorrect socket, memory or form-factor compatibility');

@@ -630,7 +630,7 @@ function rebuild3D() {
       const gpu = buildGpu(kit, parts.gpu, board);
       modelParts.gpu = gpu;
       if (gpu) { gpu.userData.baseZ = gpu.position.z; pcRoot.add(gpu); }
-      const cables = buildCables(kit, anchors, board, gpu, parts.cpu);
+      const cables = buildCables(kit, anchors, board, gpu, parts.cpu, parts.cooler, parts.storage);
       modelParts.cables = cables;
       pcRoot.add(cables);
     }
