@@ -203,6 +203,7 @@ function renderParts() {
 
   const query = $('partSearch').value.trim().toLowerCase();
   let items = [...catalog[activeCategory]];
+  if (activeCategory === 'storage') items = items.filter((part) => !part.interface.includes('HDD'));
   const isCpu = activeCategory === 'cpu';
   const isGpu = activeCategory === 'gpu';
   $('cpuVendorFilterWrap').hidden = !isCpu;
@@ -416,7 +417,7 @@ function setPreset(name) {
 }
 
 function setScratchBuild() {
-  selected = Object.fromEntries(categories.map((category) => [category, '']));
+  selected = Object.fromEntries(categories.map((category) => [category, category === 'hdd' ? 'no-hdd' : '']));
   activePreset = 'scratch';
   activeCategory = 'cpu';
   $('partSearch').value = '';
@@ -611,11 +612,12 @@ function rebuild3D() {
     const previewCase = parts.case || getPart({ case: 'mesh' }, 'case');
     const previewFans = parts.fans || getPart({ fans: 'included' }, 'fans');
     const previewLighting = parts.lighting || getPart({ lighting: 'off' }, 'lighting');
-    const anchors = buildCase(kit, previewCase, previewFans, parts.psu);
+    const anchors = buildCase(kit, previewCase, previewFans, parts.psu, parts.cooler);
     modelParts.case = anchors.group;
     pcRoot.add(anchors.group);
     modelParts.board = null;
     modelParts.storage = null;
+    modelParts.hdd = null;
     modelParts.gpu = null;
     modelParts.cables = null;
     const hasBoardComponents = [parts.cpu, parts.cooler, parts.motherboard, parts.ram, parts.storage].every(Boolean);
@@ -627,12 +629,19 @@ function rebuild3D() {
       const storage = buildStorage(kit, parts.storage, anchors);
       modelParts.storage = storage;
       if (storage) pcRoot.add(storage);
+      const hdd = parts.hdd && parts.hdd.id !== 'no-hdd'
+        ? buildStorage(kit, parts.hdd, anchors, { category: 'hdd', slot: storage ? 1 : 0 })
+        : null;
+      modelParts.hdd = hdd;
+      if (hdd) pcRoot.add(hdd);
       const gpu = buildGpu(kit, parts.gpu, board);
       modelParts.gpu = gpu;
       if (gpu) { gpu.userData.baseZ = gpu.position.z; pcRoot.add(gpu); }
-      const cables = buildCables(kit, anchors, board, gpu, parts.cpu, parts.cooler, parts.storage);
+      const cables = parts.psu
+        ? buildCables(kit, anchors, board, gpu, parts.cpu, parts.cooler, [storage, hdd].filter(Boolean))
+        : null;
       modelParts.cables = cables;
-      pcRoot.add(cables);
+      if (cables) pcRoot.add(cables);
     }
     modelParts.glass = [];
     pcRoot.traverse((object) => {

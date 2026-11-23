@@ -26,13 +26,14 @@ pass(`${categories.length} categories`);
 // 2. Each category has at least 20 additional options beyond the original catalog.
 const minimumCatalogSizes = {
   cpu: 48, cooler: 36, motherboard: 41, ram: 36, gpu: 52,
-  storage: 36, psu: 36, case: 56, fans: 34, lighting: 36, os: 32
+  storage: 36, hdd: 12, psu: 36, case: 56, fans: 34, lighting: 36, os: 32
 };
 for (const [cat, minimum] of Object.entries(minimumCatalogSizes)) {
   if ((catalog[cat]?.length || 0) < minimum) fail(`${cat}: expected at least ${minimum} options, found ${catalog[cat]?.length || 0}`);
 }
 for (const cat of categories) {
-  if (catalog[cat].length < 20) fail(`${cat}: expected at least 20 options, found ${catalog[cat].length}`);
+  const minimum = cat === 'hdd' ? 12 : 20;
+  if (catalog[cat].length < minimum) fail(`${cat}: expected at least ${minimum} options, found ${catalog[cat].length}`);
 }
 if (!catalog.gpu.some((gpu) => gpu.id === 'rx9060xt' && /RX 9060 XT/i.test(gpu.name))) fail('RX 9060 XT is missing');
 if (!catalog.os.some((os) => os.id === 'win7') || !catalog.os.some((os) => os.id === 'win8') ||
@@ -47,7 +48,7 @@ for (const os of linuxOs) {
   if (!presets[presetId]) fail(`${os.name}: missing Linux preset`);
   else if (presets[presetId].os !== os.id) fail(`${os.name}: Linux preset has the wrong OS`);
 }
-pass('every category has at least 20 options; OS includes Windows 7–11 and 20+ Linux distros');
+pass('every category has a useful catalog; OS includes Windows 7–11 and 20+ Linux distros');
 
 // 3. IDs are unique, prices are numbers, every part has copy and spec rows
 const seenIds = new Map();
@@ -242,6 +243,25 @@ for (const part of catalog.storage) {
   if (!rows.some(([label]) => label === 'Form factor')) fail(`storage "${part.id}" has no 3D form factor`);
 }
 pass('every SSD, NVMe and hard drive declares a visible 3D form factor');
+const optionalHdds = catalog.hdd.filter((drive) => drive.id !== 'no-hdd');
+if (!catalog.hdd.some((drive) => drive.id === 'no-hdd')) fail('optional HDD category has no SSD-only choice');
+if (specRows('hdd', catalog.hdd.find((drive) => drive.id === 'no-hdd'))[0]?.[1] !== 'None') {
+  fail('SSD-only HDD option displays fake drive specifications');
+}
+if (optionalHdds.length < 11 || optionalHdds.some((drive) => !drive.interface.includes('HDD'))) {
+  fail('optional HDD category is missing hard-drive choices or includes a non-HDD');
+}
+const optionalHddBuild = { ...presets.esports, hdd: optionalHdds[0]?.id };
+if (evaluate(optionalHddBuild).incomplete || evaluate(optionalHddBuild).errors.length) {
+  fail('adding an optional HDD makes a complete preset incomplete or incompatible');
+}
+if (totalPrice(optionalHddBuild) !== totalPrice(presets.esports) + (optionalHdds[0]?.price || 0)) {
+  fail('optional HDD price is not included in the build total');
+}
+if (!specRows('hdd', optionalHdds[0]).some(([label]) => label === 'Form factor')) {
+  fail('optional HDD does not expose its 3D form factor');
+}
+pass(`${optionalHdds.length} optional HDD choices are visible, priced and compatible alongside an SSD`);
 
 // 5. Every case style has a 3D entry in case.js
 const caseSource = readFileSync(path.join(root, 'js/case.js'), 'utf8');

@@ -39,6 +39,7 @@ export function evaluate(selected) {
   const pcCase = getPart(selected, 'case');
   const fans = getPart(selected, 'fans');
   const storage = getPart(selected, 'storage');
+  const extraHdd = getPart(selected, 'hdd');
 
   const errors = [];
   const warnings = [];
@@ -185,6 +186,21 @@ export function evaluate(selected) {
     });
   }
 
+  if (pcCase) {
+    for (const [category, drive] of [['storage', storage], ['hdd', extraHdd]]) {
+      if (!drive || drive.id === 'no-hdd' || drive.formFactor === 'M.2 2280') continue;
+      const baySize = drive.formFactor === '3.5-inch' ? '3.5-inch' : '2.5-inch';
+      const hasMount = (pcCase.driveBays || '').includes(baySize);
+      rule({
+        label: `${category === 'hdd' ? 'Additional ' : ''}Drive fits the case`,
+        ok: hasMount,
+        good: `The case lists a ${baySize} drive mount`,
+        bad: `The case does not list a ${baySize} drive mount for ${drive.name}. Choose a case with a matching bay.`,
+        fix: 'case'
+      });
+    }
+  }
+
   const incomplete = categories.some((category) => !getPart(selected, category));
   return { errors, warnings, checks, draw, incomplete };
 }
@@ -281,6 +297,10 @@ export function specRows(cat, p) {
         ])
       ];
     case 'storage':
+    case 'hdd':
+      if (cat === 'hdd' && p.id === 'no-hdd') {
+        return [['Additional drive', 'None'], ['Selected SSD', 'Remains in the build']];
+      }
       return [
         ['Capacity', p.capacity >= 1000 ? `${p.capacity / 1000} TB` : `${p.capacity} GB`],
         ['Interface', p.interface],

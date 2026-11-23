@@ -174,14 +174,15 @@ export function buildGpu(kit, gpu, board) {
   return g;
 }
 
-/** PSU cables as sleeved tubes from the case cut-outs to each plug. */
-export function buildCables(kit, anchors, board, gpuGroup, cpu, cooler, storage) {
-  const { mats, tag } = kit;
+/** Routes sleeved PSU power bundles to components and SATA leads between drives and the board. */
+export function buildCables(kit, anchors, board, gpuGroup, cpu, cooler, drives = []) {
+  const { tag } = kit;
   const { dims, trayZ } = anchors;
   const group = new THREE.Group();
-  const y0 = 0; // everything is in case-body coordinates
-  const Lh = dims.L / 2, base = dims.base, H = dims.H;
-  const tz = trayZ + 0.02;
+  const Lh = dims.L / 2, base = anchors.shroudTopY, H = dims.H + anchors.feet;
+  const tz = trayZ + 0.06;
+  const v = (x, y, z) => new THREE.Vector3(x, y, z);
+  const powerSource = anchors.psuCableExit;
   const sleeve = new THREE.MeshStandardMaterial({ color: 0x0b0c0e, roughness: 0.8, metalness: 0 });
 
   const tube = (pts, r = 0.055) => {
@@ -197,77 +198,94 @@ export function buildCables(kit, anchors, board, gpuGroup, cpu, cooler, storage)
       tube(pts.map((p) => p.clone().add(v(0, 0, offset))), r);
     }
   };
-  const v = (x, y, z) => new THREE.Vector3(x, y, z);
-
-  // 24-pin motherboard power, shown as a multi-conductor sleeved bundle.
-  const p24 = board.plug24.clone(); p24.y += y0;
+  // Board power leads follow the lower tray edge and enter at the motherboard grommets.
+  const p24 = board.plug24.clone();
   bundle([
-    v(p24.x, p24.y, p24.z + 0.1),
-    v(p24.x + 0.22, p24.y - 0.12, p24.z + 0.14),
-    v(Lh - 1.0, base + 0.5, tz + 0.25),
-    v(Lh - 1.15, base + 0.55, tz)
+    p24,
+    v(p24.x + 0.1, p24.y - 0.08, p24.z + 0.12),
+    v(board.xR + 0.12, p24.y - 0.08, tz + 0.1),
+    v(board.xR + 0.12, base + 0.1, tz + 0.1),
+    v(powerSource.x + 0.3, base + 0.1, powerSource.z),
+    powerSource
   ], 5, 0.028, 0.022);
 
-  // CPU EPS 8-pin cable, split into separate visible conductors.
-  const pc = board.plugCpu.clone(); pc.y += y0;
+  // CPU EPS cable is routed up the rear edge rather than across the visible board.
+  const pc = board.plugCpu.clone();
   bundle([
-    v(pc.x, pc.y, pc.z),
-    v(pc.x - 0.25, pc.y + 0.12, pc.z + 0.06),
-    v(-Lh + 1.2, anchors.boardTop - 0.05, tz + 0.2),
-    v(-Lh + 0.9, anchors.boardTop, tz)
+    pc,
+    v(pc.x - 0.1, pc.y + 0.08, pc.z + 0.08),
+    v(board.xL + 0.08, anchors.boardTop + 0.06, tz + 0.08),
+    v(board.xL + 0.08, base + 0.1, tz + 0.08),
+    v(powerSource.x + 0.12, base + 0.1, powerSource.z),
+    powerSource
   ], 4, 0.032, 0.024);
 
-  // GPU power cable: 8-pin doubles or 12V-2x6 single connector.
+  // GPU power lead returns to the nearest tray edge and then to the PSU chamber.
   if (gpuGroup) {
-    const p = gpuGroup.userData.plug.clone(); p.y += y0;
+    const p = gpuGroup.userData.plug.clone();
     const gpuCableCount = gpuGroup.userData.plugCount || 1;
     for (let i = 0; i < gpuCableCount; i++) {
       bundle([
         v(p.x - i * 0.12, p.y, p.z),
-        v(p.x + 0.16 - i * 0.12, p.y - 0.16, p.z + 0.08),
-        v(Lh - 0.8 - i * 0.08, base + 0.8, tz + 0.5),
-        v(Lh - 1.15 - i * 0.08, base + 1.75, tz)
+        v(p.x + 0.12 - i * 0.12, p.y - 0.12, p.z + 0.08),
+        v(Lh - 0.3, p.y - 0.2, p.z + 0.08),
+        v(Lh - 0.3, base + 0.14, tz + 0.1),
+        v(powerSource.x + 0.2, base + 0.1, powerSource.z),
+        powerSource
       ], 3, 0.032, 0.024);
     }
   }
 
-  // Cooler PWM lead and optional pump/ARGB lead.
+  // Cooler fan and pump leads stay close to the motherboard headers.
   tube([
-    v(board.cpuWorld.x, board.cpuWorld.y, board.cpuWorld.z + 0.42),
-    v(board.cpuWorld.x - 0.45, board.cpuWorld.y - 0.2, board.cpuWorld.z + 0.5),
-    v(-Lh + 0.75, anchors.boardTop - 0.8, tz + 0.12)
-  ], 0.018);
-  tube([
-    v(board.cpuWorld.x + 0.08, board.cpuWorld.y, board.cpuWorld.z + 0.44),
-    v(board.cpuWorld.x - 0.38, board.cpuWorld.y + 0.05, board.cpuWorld.z + 0.55),
-    v(-Lh + 0.55, anchors.boardTop - 1.05, tz + 0.12)
-  ], 0.018);
+    v(board.cpuWorld.x + 0.3, board.cpuWorld.y - 0.15, board.cpuWorld.z + 0.12),
+    v(board.cpuWorld.x + 0.48, board.cpuWorld.y - 0.28, board.cpuWorld.z + 0.1),
+    v(board.xR - 0.16, board.cpuWorld.y - 0.32, board.cpuWorld.z + 0.08)
+  ], 0.012);
+  if (cooler.kind === 'aio' && anchors.radiatorPorts?.length) {
+    for (const port of anchors.radiatorPorts) {
+      tube([
+        v(board.cpuWorld.x + 0.08, board.cpuWorld.y, board.cpuWorld.z + 0.32),
+        v(board.xL + 0.16, board.cpuWorld.y + 0.12, board.cpuWorld.z + 0.45),
+        v(port.x - 0.18, port.y - 0.08, port.z + 0.08),
+        port
+      ], 0.035);
+    }
+  }
 
   // Front-panel USB-A/USB-C, audio and power-switch harness.
   bundle([
-    v(Lh - 0.45, H - 0.08, tz),
-    v(Lh - 0.65, H - 0.12, tz + 0.18),
-    v(Lh - 0.95, anchors.boardTop - 0.75, tz + 0.22),
-    v(board.xR - 0.4, anchors.boardTop - 1.25, tz)
-  ], 3, 0.025, 0.014);
+    v(Lh - 0.35, H - 0.12, anchors.glassZ - 0.35),
+    v(Lh - 0.5, H - 0.18, tz + 0.12),
+    v(board.xR + 0.18, base + 0.3, tz + 0.1),
+    v(board.xR - 0.12, base + 0.3, tz + 0.1)
+  ], 3, 0.022, 0.012);
 
-  // SATA power/data leads for a visible 2.5-inch or 3.5-inch drive.
-  const formFactor = storage?.formFactor || '';
-  if (formFactor && formFactor !== 'M.2 2280') {
+  // SATA power leads run back to the PSU; slimmer data leads connect each drive to the board.
+  for (const drive of drives) {
+    const powerPlug = drive.userData.powerPlug;
+    const dataPlug = drive.userData.dataPlug;
     bundle([
-      v(Lh - 1.3, base + 1.1, tz),
-      v(Lh - 1.05, base + 0.9, tz + 0.1),
-      v(board.xR - 0.55, base + 1.1, tz + 0.18)
-    ], 3, 0.028, 0.018);
+      powerSource,
+      v(powerSource.x + 0.22, base + 0.1, powerSource.z),
+      v(powerPlug.x + 0.18, powerPlug.y, powerPlug.z),
+      powerPlug
+    ], 3, 0.025, 0.016);
+    tube([
+      dataPlug,
+      v(dataPlug.x + 0.12, dataPlug.y + 0.06, dataPlug.z + 0.04),
+      v(board.xR + 0.12, base + 0.35, tz + 0.08),
+      v(board.xR - 0.12, base + 0.35, tz + 0.08)
+    ], 0.012);
   }
 
-  // Three visible fan PWM leads daisy-chained back to the board/fan hub.
+  // Case fan leads follow the tray edge toward the motherboard fan headers.
   for (let i = 0; i < 3; i++) {
     tube([
-      v(Lh - 0.25 - i * 0.08, base + 0.95 + i * 0.55, dims.W / 2 - 0.1),
-      v(Lh - 0.55 - i * 0.06, base + 0.75 + i * 0.45, tz + 0.18),
-      v(board.xR - 0.15, base + 0.6 + i * 0.18, tz)
-    ], 0.014);
+      v(Lh - 0.2 - i * 0.12, base + 0.55 + i * 0.55, anchors.glassZ - 0.16),
+      v(Lh - 0.35 - i * 0.12, base + 0.35 + i * 0.4, tz + 0.12),
+      v(board.xR + 0.1, base + 0.32 + i * 0.12, tz + 0.08)
+    ], 0.01);
   }
   tag(group, 'psu');
   return group;

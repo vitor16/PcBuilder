@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { labelTexture } from './textures.js';
 
-const BW = 2.44; // board width (x), 244 mm
+const BW = 2.44; // ATX and micro-ATX width (x), 244 mm
+const BOARD_H = 2.44; // micro-ATX height (y), 244 mm
 const BOARD_STANDOFF = 0.1;
 
 /**
@@ -11,17 +12,26 @@ const BOARD_STANDOFF = 0.1;
 export function buildBoard(kit, anchors, parts) {
   const { mats, box, cyl, tag, createFan, rounded } = kit;
   const { board, cpu, cooler, ram, storage } = parts;
-  const BH = board.form === 'ATX' ? 3.05 : 2.44;
+  const width = board.form === 'ITX' ? 1.7 : BW;
+  const height = board.form === 'ATX' ? 3.05 : board.form === 'ITX' ? 1.7 : BOARD_H;
+  const scaleX = width / BW;
+  const scaleY = height / BOARD_H;
+  const BH = BOARD_H;
   const yT = BH / 2, xL = -BW / 2, xR = BW / 2;
 
   const root = new THREE.Group();
-  root.position.set(anchors.boardX0 + BW / 2, anchors.boardTop - BH / 2, anchors.trayZ + BOARD_STANDOFF);
+  root.position.set(anchors.boardX0 + width / 2, anchors.boardTop - height / 2, anchors.trayZ + BOARD_STANDOFF);
+  root.scale.set(scaleX, scaleY, 1);
 
   const bg = new THREE.Group(); // motherboard-owned
   root.add(bg);
 
   // standoffs behind the board
-  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0], [0, 1]]) {
+  for (const [sx, sy] of [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0], [0, 0], [1, 0],
+    [-1, 1], [0, 1], [1, 1]
+  ]) {
     cyl(root, 0.03, 0.03, BOARD_STANDOFF, mats.gold, sx * (BW / 2 - 0.12), sy * (BH / 2 - 0.12), -BOARD_STANDOFF / 2, 'z', 10);
   }
 
@@ -101,6 +111,7 @@ export function buildBoard(kit, anchors, parts) {
     lab.position.set(0.1, 0, 0.073); ssd.add(lab);
   }
   ssd.position.set(m2x, m2y, 0.025);
+  cyl(ssd, 0.025, 0.025, 0.018, mats.silver, 0.42, 0, storage.gen4 ? 0.16 : 0.073, 'z', 10);
   if (isM2Drive) { tag(ssd, 'storage'); root.add(ssd); }
   // slot screws and covers for extra M.2 positions
   if (board.m2 >= 2) box(bg, 0.8, 0.2, 0.05, mats.aluminiumDark, m2x, -0.95, 0.05, { r: 0.012 });
@@ -123,7 +134,11 @@ export function buildBoard(kit, anchors, parts) {
   for (let i = 0; i < 5; i++) {
     box(bg, 0.26, 0.012, 0.008, mats.aluminiumDark, xR - 0.45 - i * 0.04, -BH / 2 + 0.24 + i * 0.07, 0.018, { cast: false });
   }
-  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0.0]]) {
+  for (const [sx, sy] of [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0], [0, 0], [1, 0],
+    [-1, 1], [0, 1], [1, 1]
+  ]) {
     cyl(bg, 0.028, 0.028, 0.012, mats.screw, sx * (BW / 2 - 0.12), sy * (BH / 2 - 0.12), 0.02, 'z', 12);
   }
   tag(bg, 'motherboard');
@@ -143,7 +158,7 @@ export function buildBoard(kit, anchors, parts) {
 
   /* ---- RAM ---- */
   const ramG = new THREE.Group();
-  const slotX0 = 0.34, pitch = 0.1, ramH = 1.3;
+  const slotX0 = 0.34, pitch = 0.1, ramH = 0.46;
   const filled = board.slots === 2 ? [0, 1] : ram.sticks === 4 ? [0, 1, 2, 3] : [1, 3];
   const stickIdx = ram.sticks === 4 || board.slots === 2 ? filled : [1, 3];
   for (let i = 0; i < board.slots; i++) {
@@ -159,6 +174,11 @@ export function buildBoard(kit, anchors, parts) {
     box(stick, 0.08, ramH - 0.02, 0.28, mats.heatsink, 0, 0, 0.14 + 0.1, { r: 0.012 });
     box(stick, 0.07, ramH - 0.18, 0.045, mats.glow, 0, 0.0, 0.14 + 0.1 + 0.15, { cast: false });
     box(stick, 0.084, ramH - 0.02, 0.012, mats.aluminiumDark, 0, 0, 0.14 + 0.1 + 0.13, { cast: false });
+    const ramBadge = new THREE.Mesh(new THREE.PlaneGeometry(0.06, Math.min(0.3, ramH * 0.68)), new THREE.MeshStandardMaterial({
+      map: labelTexture(`${ram.capacity} GB`, `DDR${ram.type.slice(-1)} · ${ram.speed} MT/s`, '#d8e2e8', 256, 96),
+      roughness: 0.55
+    }));
+    ramBadge.position.set(0, 0, 0.14 + 0.1 + 0.16); stick.add(ramBadge);
     for (const x of [-0.032, 0.032]) {
       for (const y of [-0.34, -0.16, 0.16, 0.34]) {
         box(stick, 0.012, 0.018, 0.008, mats.silver, x, y, 0.414, { cast: false });
@@ -242,20 +262,22 @@ export function buildBoard(kit, anchors, parts) {
   }
   tag(coolG, 'cooler'); root.add(coolG);
 
-  const world = (x, y, z) => new THREE.Vector3(x, y, z).add(root.position);
+  const world = (x, y, z) => new THREE.Vector3(x * scaleX, y * scaleY, z).add(root.position);
   return {
-    group: root, BH, BW, parts: { bg, cpuG, ramG, coolG, ssd },
+    group: root, BH: height, BW: width, parts: { bg, cpuG, ramG, coolG, ssd },
     cpuWorld: world(cx, cy, 0.1),
     slot16: world(xL + 0.06 + 0.45, y16, 0.065),
     yTopWorld: anchors.boardTop,
-    cx, cy, xR, xL, yT,
+    cx: root.position.x + cx * scaleX, cy: root.position.y + cy * scaleY,
+    xR: root.position.x + xR * scaleX, xL: root.position.x + xL * scaleX,
+    yT: root.position.y + yT * scaleY,
     plugCpu: world(xL + 0.75, yT - 0.07, 0.17),
     plug24: world(xR - 0.07, 0.15, 0.19)
   };
 }
 
 /** Builds visible 2.5/3.5-inch drives on an interior case mount; M.2 drives sit on the board. */
-export function buildStorage(kit, storage, anchors) {
+export function buildStorage(kit, storage, anchors, { category = 'storage', slot = 0 } = {}) {
   const { mats, box, cyl, tag } = kit;
   const formFactor = storage.formFactor || 'M.2 2280';
   if (formFactor === 'M.2 2280' || storage.interface.includes('NVMe')) return null;
@@ -289,7 +311,21 @@ export function buildStorage(kit, storage, anchors) {
   box(group, 0.08, 0.12, 0.04, mats.plasticLight, width / 2 - 0.015, -height * 0.25, 0, { cast: false });
   box(group, 0.08, 0.08, 0.04, mats.plasticLight, width / 2 - 0.015, height * 0.25, 0, { cast: false });
 
-  group.position.set(anchors.frontX - 0.55, anchors.shroudTopY + 0.42, anchors.glassZ - 0.55);
-  tag(group, 'storage');
+  const mountX = anchors.driveMount.x - slot * (width + 0.15);
+  const mountY = anchors.driveMount.y + height / 2;
+  const mountZ = anchors.driveMount.z;
+  const sled = box(group, width + 0.16, height + 0.08, 0.035, mats.aluminiumDark, 0, 0, -thickness / 2 - 0.045, { r: 0.018 });
+  sled.userData.storageMount = true;
+  for (const sx of [-1, 1]) {
+    box(group, 0.05, height + 0.08, 0.09, mats.steelLight, sx * (width / 2 + 0.055), 0, -thickness / 2 - 0.035, { r: 0.012 });
+    for (const sy of [-height * 0.36, height * 0.36]) {
+      cyl(group, 0.022, 0.022, 0.018, mats.silver, sx * (width / 2 + 0.055), sy, -thickness / 2 + 0.015, 'z', 10);
+    }
+  }
+  box(group, width * 0.7, 0.04, 0.08, mats.aluminiumDark, 0, -height / 2 - 0.035, -thickness / 2 - 0.035, { r: 0.012 });
+  group.position.set(mountX, mountY, mountZ);
+  group.userData.powerPlug = new THREE.Vector3(width / 2 + 0.08, -height * 0.25, 0).add(group.position);
+  group.userData.dataPlug = new THREE.Vector3(width / 2 + 0.08, height * 0.25, 0).add(group.position);
+  tag(group, category);
   return group;
 }

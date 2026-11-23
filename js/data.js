@@ -39,6 +39,11 @@ export const categoryInfo = {
     text: 'Storage keeps the operating system, apps, games and files after the PC is turned off. NVMe and SATA SSDs have no moving parts; hard drives trade speed for large, lower-cost capacity.',
     note: 'Check capacity, M.2/SATA connection, drive size and PCIe generation support. Published sequential read speed is a best-case transfer figure, not a direct gaming-FPS measure.'
   },
+  hdd: {
+    label: 'Optional hard drive', short: 'HDD',
+    text: 'Add a mechanical hard drive alongside the selected SSD for extra room for games and files. Choose “No additional HDD” to keep the build SSD-only.',
+    note: 'A hard drive needs a matching case bay, a SATA data connection and PSU SATA power. Check the case drive-bay list before choosing a 3.5-inch model.'
+  },
   psu: {
     label: 'Power supply', short: 'PSU',
     text: 'The power supply converts wall power for the PC and feeds every component. Capacity, protections, connector compatibility, noise and efficiency all matter; an efficiency badge alone does not measure overall quality.',
@@ -531,6 +536,7 @@ export const catalog = {
       fit: 'Creators who keep lots of large projects.'
     }
   ],
+  hdd: [],
 
   psu: [
     {
@@ -741,6 +747,23 @@ export const catalog = {
 
 addCatalogOptions(catalog);
 
+catalog.hdd = [
+  {
+    id: 'no-hdd', name: 'No additional HDD', price: 0, tag: 'Optional · SSD only',
+    short: 'Keep the selected SSD as the only drive', capacity: 0, interface: 'None',
+    read: 0, gen4: false, formFactor: 'None',
+    desc: 'Skip a second hard drive. Your selected SSD remains in the build.',
+    fit: 'Any build that does not need extra mechanical storage.'
+  },
+  ...catalog.storage
+    .filter((drive) => drive.interface.includes('HDD'))
+    .map((drive) => ({
+      ...drive,
+      id: `extra-${drive.id}`,
+      tag: `Optional HDD · ${drive.tag}`
+    }))
+];
+
 for (const cpu of catalog.cpu) {
   const intelModel = cpu.name.match(/Core i[3579]-(\d{4,5})/i);
   const ryzenModel = cpu.name.match(/Ryzen\s+\d+\s+(\d{4})/i);
@@ -782,6 +805,8 @@ export const presets = {
   workstationAM5: { cpu: 'r7950x', cooler: 'aio360-quiet', motherboard: 'x870-atx', ram: '128ddr5-5200', gpu: 'rtx5080', storage: '8tbgen4', psu: '1200w-gold', case: 'workstation-full-atx', fans: 'quad140-pwm', lighting: 'warm-white', os: 'opensuse-leap' },
   livingRoom: { cpu: 'r8600g', cooler: 'stock', motherboard: 'a620m-2slot', ram: '32ddr5-5600', gpu: 'none', storage: '1tbsata', psu: '450w-bronze', case: 'retro-matx-cube', fans: 'single92', lighting: 'off', os: 'lubuntu' }
 };
+
+for (const preset of Object.values(presets)) preset.hdd = 'no-hdd';
 
 export const presetInfo = {
   starter: { label: 'Study and browsing', blurb: 'Schoolwork, browsing, video calls and a few light games.' },

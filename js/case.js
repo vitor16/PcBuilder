@@ -45,7 +45,7 @@ function finePerforationMaterial(color) {
  * Front of the case is +x, rear is -x, glass side faces +z.
  * Returns { group, dims, ...anchors used by the board and card builders }.
  */
-export function buildCase(kit, pcCase, fanPack, psu) {
+export function buildCase(kit, pcCase, fanPack, psu, cooler = null) {
   const { mats, box, cyl, screw, tag, createFan } = kit;
   const isC6Max = pcCase.id === 'jonsbo-c6-max';
   const d = isC6Max ? CASE_DIMS.c6max : CASE_DIMS[pcCase.style];
@@ -57,7 +57,10 @@ export function buildCase(kit, pcCase, fanPack, psu) {
 
   const style = pcCase.style;
   const showcase = ['showcase', 'fishbowl', 'towerglass', 'matxglass'].includes(style);
-  const hasPerfFront = !showcase && style !== 'silent';
+  const caseDescription = `${pcCase.name} ${pcCase.materials || ''} ${pcCase.includedFanLayout || ''}`.toLowerCase();
+  const frontMesh = /mesh front|front mesh|perforated.*front|front.*perforated|ventilated front|front intake/.test(caseDescription);
+  const glassFront = showcase && !frontMesh;
+  const hasPerfFront = !glassFront && style !== 'silent';
   const caseSteel = isC6Max
     ? mats.steel.clone()
     : pcCase.finish === 'light' ? mats.steelWhite : mats.steel;
@@ -81,7 +84,7 @@ export function buildCase(kit, pcCase, fanPack, psu) {
   const trayZ = -W / 2 + T / 2;
   box(body, L, H, T, mats.trayInner, 0, H / 2, trayZ);
   // roof frame (leave the middle open or perforated)
-  if (showcase) {
+  if (glassFront) {
     box(body, L, T, W, caseSteel, 0, H - T / 2, 0, { r: 0.015 });
   } else {
     // solid rails and a perforated centre so roof fans can breathe
@@ -101,7 +104,7 @@ export function buildCase(kit, pcCase, fanPack, psu) {
     box(body, 0.1, 0.1, W, caseSteelLight, L / 2 - 0.05, 0.05, 0, { r: 0.02 });
     box(body, 0.1, H, 0.07, caseSteelLight, L / 2 - 0.05, H / 2, W / 2 - 0.035);
     box(body, 0.1, H, 0.07, caseSteelLight, L / 2 - 0.05, H / 2, -W / 2 + 0.035);
-  } else if (showcase) {
+  } else if (glassFront) {
     // showcase: glass front panel
     const fg = new THREE.Mesh(new THREE.BoxGeometry(0.03, H - 0.1, W - 0.1), mats.glass);
     fg.userData.isGlass = true;
@@ -233,6 +236,36 @@ export function buildCase(kit, pcCase, fanPack, psu) {
   const psuLen = (psu?.lengthMm ?? 160) / 100;
   const shW = Math.min(showcase ? L - 1.35 : L - 1.2, Math.max(2.6, psuLen + 0.8));
   const shX = -L / 2 + 0.06 + shW / 2;
+  const psuX = -L / 2 + 0.08 + psuLen / 2;
+  const psuLength = psu?.lengthMm ? psuLen : 1.6;
+  if (psu) {
+    const psuGroup = new THREE.Group();
+    const psuShell = box(psuGroup, psuLength, 0.82, 1.48, mats.plastic, 0, 0, 0, { r: 0.035 });
+    psuShell.material = mats.plastic.clone();
+    psuShell.material.color.set(pcCase.finish === 'light' ? 0x30343a : 0x101317);
+    box(psuGroup, psuLength * 0.72, 0.018, 1.22, mats.aluminiumDark, 0.02, 0.415, 0, { r: 0.025 });
+    const fanX = -psuLength * 0.08;
+    cyl(psuGroup, 0.48, 0.48, 0.018, mats.plasticLight, fanX, -0.425, 0, 'y', 48);
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      box(psuGroup, 0.018, 0.012, 0.82, mats.aluminiumDark,
+        fanX + Math.cos(angle) * 0.21, -0.439, Math.sin(angle) * 0.21,
+        { cast: false }).rotation.y = angle;
+    }
+    cyl(psuGroup, 0.07, 0.07, 0.02, mats.aluminiumDark, fanX, -0.442, 0, 'y', 24);
+    for (const [x, z] of [[-0.58, -0.58], [0.58, -0.58], [-0.58, 0.58], [0.58, 0.58]]) {
+      cyl(psuGroup, 0.025, 0.025, 0.012, mats.silver, x, -0.442, z, 'y', 10);
+    }
+    for (const z of [-0.22, 0, 0.22]) {
+      box(psuGroup, 0.045, 0.16, 0.1, mats.plasticLight, -psuLength / 2 - 0.012, 0.08, z, { r: 0.01 });
+    }
+    box(psuGroup, 0.04, 0.14, 0.12, mats.plasticLight, -psuLength / 2 - 0.014, -0.12, -0.28, { r: 0.01 });
+    box(psuGroup, 0.035, 0.07, 0.07, mats.glowSoft, -psuLength / 2 - 0.04, -0.12, 0.28, { r: 0.01, cast: false });
+    psuGroup.position.set(psuX, base / 2, 0);
+    tag(psuGroup, 'psu');
+    body.add(psuGroup);
+  }
+
   box(shroud, shW, 0.045, W - 0.1, mats.aluminiumDark, shX, base, 0, { r: 0.012 }); // top
   const front = box(shroud, shW, base - 0.04, 0.045, isC6Max ? caseSteel : mats.steelLight, shX, base / 2, W / 2 - 0.1, { r: 0.012 }); // glass-facing wall
   front.userData.shroudFront = true;
@@ -267,42 +300,76 @@ export function buildCase(kit, pcCase, fanPack, psu) {
 
   /* ---- fans ---- */
   const slots = [];
-  const rearFan = { x: -L / 2 + 0.17, y: boardTop - 0.6, rotY: Math.PI / 2, d: 1.2, owner: 'case' };
+  const caseFanSize = Number(pcCase.includedFanLayout?.match(/\b(92|120|140)\s*mm/i)?.[1] || 120);
+  const caseFanDiameter = caseFanSize / 100;
+  const rearFan = { x: -L / 2 + 0.17, y: boardTop - 0.6, rotY: Math.PI / 2, d: caseFanDiameter, owner: 'case' };
   const pack = fanPack && fanPack.id !== 'included' ? fanPack : null;
   const packRgb = pack ? pack.rgb : false;
+  const topRadiator = cooler?.kind === 'aio' && cooler.radiator;
   if (isC6Max) {
     slots.push(rearFan);
-    for (const x of [-0.62, 0.62]) {
-      slots.push({ x, y: H - 0.17, z: 0, rotX: -Math.PI / 2, d: 1.2, owner: pack ? 'fans' : 'case', rgb: packRgb });
+    if (!topRadiator) for (const x of [-0.62, 0.62]) {
+      slots.push({ x, y: H - 0.17, z: 0, rotX: -Math.PI / 2, d: caseFanDiameter, owner: pack ? 'fans' : 'case', rgb: packRgb });
     }
     slots.push({ x: 0, y: 0.13, z: 0, rotX: Math.PI / 2, d: 1.2, owner: pack && pack.extra > 0 ? 'fans' : 'case', rgb: packRgb });
   } else {
     slots.push(rearFan);
   }
-  if (!isC6Max && showcase) {
-    const intakeCount = Math.min(4, Math.max(3, pcCase.fans - 4));
+  if (!isC6Max && showcase && !frontMesh) {
+    const intakeCount = Math.min(4, Math.max(0, pcCase.fans - 1));
     for (let i = 0; i < intakeCount; i++) {
       const gap = (H - base - 1.2) / Math.max(1, intakeCount - 1);
-      slots.push({ x: L / 2 - 0.75, y: base + 0.6 + i * gap, z: W / 2 - 0.3, rotY: 0, d: 1.2, owner: pack ? 'fans' : 'case', rgb: pack ? packRgb : true });
+      slots.push({ x: L / 2 - 0.75, y: base + 0.6 + i * gap, z: W / 2 - 0.3, rotY: 0, d: caseFanDiameter, owner: pack ? 'fans' : 'case', rgb: pack ? packRgb : true });
     }
-    const roofCount = Math.max(0, pcCase.fans - 1 - intakeCount);
+    const roofCount = topRadiator ? 0 : Math.max(0, pcCase.fans - 1 - intakeCount);
     for (let i = 0; i < roofCount; i++) {
       const x = (i - (roofCount - 1) / 2) * 1.25;
-      slots.push({ x, y: H - 0.17, z: 0, rotX: -Math.PI / 2, d: 1.4, owner: 'case', rgb: true });
+      slots.push({ x, y: H - 0.17, z: 0, rotX: -Math.PI / 2, d: caseFanDiameter, owner: 'case', rgb: true });
     }
   } else if (!isC6Max) {
-    const nFront = ['compact', 'mini', 'cube'].includes(style) ? 2 : 3;
+    const nFront = Math.min(['compact', 'mini', 'cube'].includes(style) ? 2 : 3, Math.max(0, pcCase.fans - 1));
     for (let i = 0; i < nFront; i++) {
       const gap = (H - base - 0.25) / nFront;
-      slots.push({ x: L / 2 - 0.2, y: base + gap * (i + 0.5) + 0.1, z: 0, rotY: -Math.PI / 2, d: 1.2, owner: pack ? 'fans' : 'case', rgb: pack ? packRgb : false });
+      slots.push({ x: L / 2 - 0.2, y: base + gap * (i + 0.5) + 0.1, z: 0, rotY: -Math.PI / 2, d: caseFanDiameter, owner: pack ? 'fans' : 'case', rgb: pack ? packRgb : false });
     }
-    const requestedTopFans = Math.max(pcCase.fans - 1 - nFront, fanPack && fanPack.extra > 0 ? 2 : 0);
+    const requestedTopFans = topRadiator ? 0 : Math.max(pcCase.fans - 1 - nFront, fanPack && fanPack.extra > 0 ? 2 : 0);
     for (let i = 0; i < requestedTopFans; i++) {
       const x = (i - (requestedTopFans - 1) / 2) * 1.25;
-      slots.push({ x, y: H - 0.17, z: 0, rotX: -Math.PI / 2, d: 1.4, owner: fanPack && fanPack.extra > 0 ? 'fans' : 'case', rgb: false });
+      slots.push({ x, y: H - 0.17, z: 0, rotX: -Math.PI / 2, d: caseFanDiameter, owner: fanPack && fanPack.extra > 0 ? 'fans' : 'case', rgb: false });
     }
   }
   const fanObjs = [];
+  const radiatorPorts = [];
+  const radiatorFanSize = topRadiator && cooler.radiator % 140 === 0 ? 140 : 120;
+  const radiatorFanCount = topRadiator ? Math.max(1, Math.round(cooler.radiator / radiatorFanSize)) : 0;
+  if (radiatorFanCount) {
+    const radiatorLength = cooler.radiator / 100;
+    const radiatorY = H - 0.36;
+    const radiator = box(body, radiatorLength, 0.18, 1.2, mats.aluminiumDark, 0, radiatorY, 0, { r: 0.025 });
+    tag(radiator, 'cooler');
+    box(body, radiatorLength * 0.88, 0.05, 0.95, mats.aluminium, 0, radiatorY - 0.1, 0, { cast: false });
+    const finCount = Math.max(12, Math.round(cooler.radiator / 12));
+    for (let i = 0; i < finCount; i++) {
+      const x = -radiatorLength * 0.42 + i * (radiatorLength * 0.84) / Math.max(1, finCount - 1);
+      box(body, 0.012, 0.1, 0.88, mats.aluminiumDark, x, radiatorY - 0.12, 0, { cast: false });
+    }
+    for (const z of [-0.3, 0.3]) {
+      const port = new THREE.Vector3(radiatorLength / 2 - 0.04, radiatorY + FEET, z);
+      cyl(body, 0.055, 0.055, 0.13, mats.plasticLight, port.x, radiatorY, z, 'x', 16);
+      cyl(body, 0.032, 0.032, 0.14, mats.aluminiumDark, port.x + 0.06, radiatorY, z, 'x', 12);
+      port.x += 0.12;
+      radiatorPorts.push(port);
+    }
+    for (let i = 0; i < radiatorFanCount; i++) {
+      const x = (i - (radiatorFanCount - 1) / 2) * radiatorFanSize / 100;
+      const fan = createFan(radiatorFanSize / 100, { rgb: false, blades: 9 });
+      fan.position.set(x, H - 0.17, 0);
+      fan.rotation.x = -Math.PI / 2;
+      tag(fan, 'cooler');
+      body.add(fan);
+      fanObjs.push(fan);
+    }
+  }
   for (const s of slots) {
     const fan = createFan(s.d, { rgb: s.rgb ?? false });
     fan.position.set(s.x, s.y, s.z ?? 0);
@@ -313,9 +380,19 @@ export function buildCase(kit, pcCase, fanPack, psu) {
     fanObjs.push(fan);
   }
 
+  const driveX = isC6Max
+    ? L / 2 - 0.8
+    : L / 2 - (showcase ? 2.4 : 1.8);
   return {
-    group, body, dims: d, feet: FEET, boardTop, boardX0: -L / 2 + 0.06,
-    trayZ: -W / 2 + T, glassZ: W / 2, shroudTopY: base, fanCount: slots.length, rearFanY: rearFan.y,
-    frontX: L / 2 - (showcase ? 1.2 : 0.38), isShowcase: showcase
+    group, body, dims: d, feet: FEET, boardTop: boardTop + FEET, boardX0: -L / 2 + 0.06,
+    trayZ: -W / 2 + T, glassZ: W / 2, shroudTopY: base + FEET,     fanCount: slots.length + radiatorFanCount, rearFanY: rearFan.y + FEET,
+    frontX: driveX, isShowcase: showcase,
+    driveMount: { x: driveX, y: base + FEET, z: W / 2 - 0.25 },
+    psuCableExit: psu ? new THREE.Vector3(
+      psuX + psuLength / 2 - 0.12,
+      base / 2 + FEET + 0.08,
+      -W / 2 + T + 0.1
+    ) : null,
+    radiatorPorts
   };
 }
