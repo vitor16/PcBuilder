@@ -158,7 +158,7 @@ export function buildBoard(kit, anchors, parts) {
 
   /* ---- RAM ---- */
   const ramG = new THREE.Group();
-  const slotX0 = 0.34, pitch = 0.1, ramH = 0.46;
+  const slotX0 = 0.34, pitch = 0.1, ramH = 1.32;
   const filled = board.slots === 2 ? [0, 1] : ram.sticks === 4 ? [0, 1, 2, 3] : [1, 3];
   const stickIdx = ram.sticks === 4 || board.slots === 2 ? filled : [1, 3];
   for (let i = 0; i < board.slots; i++) {
@@ -174,7 +174,7 @@ export function buildBoard(kit, anchors, parts) {
     box(stick, 0.08, ramH - 0.02, 0.28, mats.heatsink, 0, 0, 0.14 + 0.1, { r: 0.012 });
     box(stick, 0.07, ramH - 0.18, 0.045, mats.glow, 0, 0.0, 0.14 + 0.1 + 0.15, { cast: false });
     box(stick, 0.084, ramH - 0.02, 0.012, mats.aluminiumDark, 0, 0, 0.14 + 0.1 + 0.13, { cast: false });
-    const ramBadge = new THREE.Mesh(new THREE.PlaneGeometry(0.06, Math.min(0.3, ramH * 0.68)), new THREE.MeshStandardMaterial({
+    const ramBadge = new THREE.Mesh(new THREE.PlaneGeometry(0.06, Math.min(0.72, ramH * 0.68)), new THREE.MeshStandardMaterial({
       map: labelTexture(`${ram.capacity} GB`, `DDR${ram.type.slice(-1)} · ${ram.speed} MT/s`, '#d8e2e8', 256, 96),
       roughness: 0.55
     }));

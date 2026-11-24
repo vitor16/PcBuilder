@@ -339,6 +339,7 @@ export function buildCase(kit, pcCase, fanPack, psu, cooler = null) {
     }
   }
   const fanObjs = [];
+  const fanPorts = [];
   const radiatorPorts = [];
   const radiatorFanSize = topRadiator && cooler.radiator % 140 === 0 ? 140 : 120;
   const radiatorFanCount = topRadiator ? Math.max(1, Math.round(cooler.radiator / radiatorFanSize)) : 0;
@@ -378,6 +379,7 @@ export function buildCase(kit, pcCase, fanPack, psu, cooler = null) {
     tag(fan, s.owner);
     body.add(fan);
     fanObjs.push(fan);
+    fanPorts.push(new THREE.Vector3(s.x, s.y + FEET, s.z ?? 0));
   }
 
   const driveX = isC6Max
@@ -387,6 +389,7 @@ export function buildCase(kit, pcCase, fanPack, psu, cooler = null) {
     group, body, dims: d, feet: FEET, boardTop: boardTop + FEET, boardX0: -L / 2 + 0.06,
     trayZ: -W / 2 + T, glassZ: W / 2, shroudTopY: base + FEET,     fanCount: slots.length + radiatorFanCount, rearFanY: rearFan.y + FEET,
     frontX: driveX, isShowcase: showcase,
+    fanPorts,
     driveMount: { x: driveX, y: base + FEET, z: W / 2 - 0.25 },
     psuCableExit: psu ? new THREE.Vector3(
       psuX + psuLength / 2 - 0.12,

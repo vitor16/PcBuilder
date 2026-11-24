@@ -280,13 +280,19 @@ export function buildCables(kit, anchors, board, gpuGroup, cpu, cooler, drives =
   }
 
   // Case fan leads follow the tray edge toward the motherboard fan headers.
-  for (let i = 0; i < 3; i++) {
+  const fanPorts = anchors.fanPorts || [];
+  fanPorts.forEach((fanPort, i) => {
+    const headerY = base + 0.24 + (i % 4) * 0.09;
+    const socket = fanPort.clone();
+    socket.z = tz + 0.08;
     tube([
-      v(Lh - 0.2 - i * 0.12, base + 0.55 + i * 0.55, anchors.glassZ - 0.16),
-      v(Lh - 0.35 - i * 0.12, base + 0.35 + i * 0.4, tz + 0.12),
-      v(board.xR + 0.1, base + 0.32 + i * 0.12, tz + 0.08)
-    ], 0.01);
-  }
+      socket,
+      v(Lh - 0.12, fanPort.y, tz + 0.08),
+      v(Lh - 0.12, headerY, tz + 0.08),
+      v(board.xR + 0.12, headerY, tz + 0.08),
+      v(board.xR - 0.12, headerY, tz + 0.08)
+    ], 0.012);
+  });
   tag(group, 'psu');
   return group;
 }
